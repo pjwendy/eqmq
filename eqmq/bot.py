@@ -1,17 +1,33 @@
-"""The Bot: one headless character, with MQ2-style TLOs over a live state mirror."""
+"""The Bot: one headless character, with MQ2-style TLOs, commands and #events."""
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
+from dataclasses import dataclass
+from typing import Any, Callable
 
+from .eqstr import EqStr
+from .events import EventPattern, render_chat, render_message
 from .network import PROTOCOL_VERSION, INetworkClient, ProtobufNetworkClient
 from .proto import headless_pb2 as pb
 from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.1"
+SDK_VERSION = "eqmq/0.2"
+COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
+
+_CHANNEL_COMMANDS = {
+    "/say": pb.CHAT_SAY, "/s": pb.CHAT_SAY,
+    "/g": pb.CHAT_GROUP, "/gsay": pb.CHAT_GROUP,
+    "/gu": pb.CHAT_GUILD, "/guildsay": pb.CHAT_GUILD,
+    "/ooc": pb.CHAT_OOC,
+    "/shout": pb.CHAT_SHOUT,
+    "/auction": pb.CHAT_AUCTION, "/auc": pb.CHAT_AUCTION,
+    "/rsay": pb.CHAT_RAID,
+}
 
 
 class Refused(Exception):
@@ -23,15 +39,30 @@ class Refused(Exception):
         self.detail = detail
 
 
+@dataclass(frozen=True)
+class CommandResult:
+    ok: bool
+    error: str = ""
+
+    def __bool__(self) -> bool:
+        return self.ok
+
+
 class Bot:
-    def __init__(self, network: INetworkClient, token: str, character: str):
+    def __init__(self, network: INetworkClient, token: str, character: str, eqstr: str | None = None):
         self._net = network
         self._token = token
         self._character = character
+        self._eqstr = EqStr.load(eqstr)
         self._state = StateMirror()
         self._ready = asyncio.Event()
         self._closed = asyncio.Event()
         self._receiver: asyncio.Task | None = None
+        self._refused: Refused | None = None
+        self._next_id = 1
+        self._pending: dict[int, asyncio.Future] = {}
+        self._handlers: dict[str, list[Callable]] = {"chat": [], "message": [], "line": []}
+        self._patterns: list[tuple[EventPattern, Callable]] = []
         self.session_id = ""
         self.spawn_id = 0
 
@@ -48,9 +79,8 @@ class Bot:
         await self._net.send(hello)
 
         self._receiver = asyncio.create_task(self._receive())
-        ready = asyncio.create_task(self._ready.wait())
-        closed = asyncio.create_task(self._closed.wait())
-        done, pending = await asyncio.wait({ready, closed}, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+        waits = {asyncio.create_task(self._ready.wait()), asyncio.create_task(self._closed.wait())}
+        _, pending = await asyncio.wait(waits, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
         for t in pending:
             t.cancel()
         if self._refused:
@@ -72,8 +102,6 @@ class Bot:
     def connected(self) -> bool:
         return self._ready.is_set() and not self._closed.is_set()
 
-    _refused: Refused | None = None
-
     async def _receive(self) -> None:
         try:
             async for frame in self._net.frames():
@@ -86,11 +114,21 @@ class Bot:
                     self.session_id = frame.welcome.session_id
                     self.spawn_id = frame.welcome.spawn_id
                     log.info("welcome: session %s spawn %d", self.session_id, self.spawn_id)
-                    continue
-                self._state.apply(frame)
-                if self._state.ready:
-                    self._ready.set()
+                elif kind == "result":
+                    fut = self._pending.pop(frame.result.id, None)
+                    if fut and not fut.done():
+                        fut.set_result(CommandResult(frame.result.ok, frame.result.error))
+                elif kind == "event":
+                    await self._dispatch_event(frame.event)
+                else:
+                    self._state.apply(frame)
+                    if self._state.ready:
+                        self._ready.set()
         finally:
+            for fut in self._pending.values():
+                if not fut.done():
+                    fut.set_result(CommandResult(False, "disconnected"))
+            self._pending.clear()
             self._closed.set()
 
     # ---- TLOs ----
@@ -128,9 +166,146 @@ class Bot:
     def SpawnCount(self, search: str = "") -> int:
         return len(self.Spawns(search))
 
+    # ---- commands ----
 
-async def connect(host: str, port: int, token: str, character: str, timeout: float = 60) -> Bot:
-    """Log a headless character in and return it once its first snapshot has arrived."""
-    bot = Bot(ProtobufNetworkClient(host, port), token, character)
+    async def command(self, cmd: pb.Command) -> CommandResult:
+        """Send a raw Command and wait for the server's CommandResult."""
+        if not self.connected:
+            return CommandResult(False, "not connected")
+        cmd.id = self._next_id
+        self._next_id += 1
+        fut = asyncio.get_running_loop().create_future()
+        self._pending[cmd.id] = fut
+        frame = pb.ClientFrame()
+        frame.command.CopyFrom(cmd)
+        await self._net.send(frame)
+        try:
+            return await asyncio.wait_for(fut, COMMAND_TIMEOUT)
+        except asyncio.TimeoutError:
+            self._pending.pop(cmd.id, None)
+            return CommandResult(False, "no response from the server")
+
+    async def target(self, spawn: Spawn | int | None) -> CommandResult:
+        """Target a spawn (or None to clear). The result means 'asked'; check bot.Target after."""
+        cmd = pb.Command()
+        cmd.target.spawn_id = 0 if spawn is None else (spawn if isinstance(spawn, int) else spawn.ID)
+        return await self.command(cmd)
+
+    async def attack(self, on: bool = True) -> CommandResult:
+        cmd = pb.Command()
+        cmd.attack.on = on
+        return await self.command(cmd)
+
+    async def chat(self, channel: int, text: str, to: str = "") -> CommandResult:
+        cmd = pb.Command()
+        cmd.chat.channel = channel
+        cmd.chat.text = text
+        cmd.chat.to = to
+        return await self.command(cmd)
+
+    async def say(self, text: str) -> CommandResult:
+        return await self.chat(pb.CHAT_SAY, text)
+
+    async def tell(self, to: str, text: str) -> CommandResult:
+        return await self.chat(pb.CHAT_TELL, text, to)
+
+    async def group(self, text: str) -> CommandResult:
+        return await self.chat(pb.CHAT_GROUP, text)
+
+    async def sit(self, sit: bool = True) -> CommandResult:
+        cmd = pb.Command()
+        cmd.sit.sit = sit
+        return await self.command(cmd)
+
+    async def stand(self) -> CommandResult:
+        return await self.sit(False)
+
+    async def DoCommand(self, line: str) -> CommandResult:
+        """Run an MQ2/EQ-style slash command, e.g. "/target id 123" or "/tell Eboola hi"."""
+        word, _, rest = line.strip().partition(" ")
+        word, rest = word.lower(), rest.strip()
+
+        if word in _CHANNEL_COMMANDS:
+            return await self.chat(_CHANNEL_COMMANDS[word], rest)
+        if word in ("/tell", "/t", "/msg"):
+            to, _, text = rest.partition(" ")
+            return await self.tell(to, text.strip())
+        if word == "/target":
+            if rest.lower() in ("", "clear"):
+                return await self.target(None)
+            spawn = self.Spawn(rest)  # "id 123", "npc", a name, ... (MQ2 search syntax)
+            return await self.target(spawn) if spawn else CommandResult(False, f"no spawn matches '{rest}'")
+        if word == "/attack":
+            if rest.lower() not in ("on", "off"):
+                return CommandResult(False, "usage: /attack on|off")
+            return await self.attack(rest.lower() == "on")
+        if word == "/sit":
+            return await self.sit(rest.lower() != "off")
+        if word == "/stand":
+            return await self.stand()
+        if word == "/bot":
+            # EQEmu bot commands are typed as ^command in say
+            return await self.say(rest if rest.startswith("^") else f"^{rest}")
+        return CommandResult(False, f"unsupported command {word}")
+
+    # ---- events ----
+
+    def on(self, kind: str) -> Callable:
+        """Register a handler: @bot.on("chat") gets a Chat, "message" a Message, "line" every line."""
+        if kind not in self._handlers:
+            raise ValueError(f"unknown event kind {kind!r}; use one of {sorted(self._handlers)}")
+
+        def register(fn: Callable) -> Callable:
+            self._handlers[kind].append(fn)
+            return fn
+
+        return register
+
+    def event(self, pattern: str) -> Callable:
+        """MQ2 #event: @bot.event("#1# tells you, '#2#'") is called with the captures."""
+        compiled = EventPattern(pattern)
+
+        def register(fn: Callable) -> Callable:
+            self._patterns.append((compiled, fn))
+            return fn
+
+        return register
+
+    async def _call(self, fn: Callable, *args: Any) -> None:
+        try:
+            result = fn(*args)
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            log.exception("event handler %r failed", fn)
+
+    async def _dispatch_event(self, event: pb.GameEvent) -> None:
+        kind = event.WhichOneof("event")
+        if kind == "chat":
+            item = render_chat(event.chat)
+            handlers = self._handlers["chat"]
+        elif kind == "message":
+            item = render_message(event.message, self._eqstr)
+            handlers = self._handlers["message"]
+        else:
+            return
+
+        for fn in handlers:
+            await self._call(fn, item)
+        for fn in self._handlers["line"]:
+            await self._call(fn, item.Line)
+        for pattern, fn in self._patterns:
+            captures = pattern.match(item.Line)
+            if captures is not None:
+                await self._call(fn, *captures)
+
+
+async def connect(host: str, port: int, token: str, character: str, eqstr: str | None = None, timeout: float = 60) -> Bot:
+    """Log a headless character in and return it once its first snapshot has arrived.
+
+    eqstr: path to your client's eqstr_us.txt, to render messages sent as string ids
+    (or set EQMQ_EQSTR).
+    """
+    bot = Bot(ProtobufNetworkClient(host, port), token, character, eqstr)
     await bot.start(timeout)
     return bot
