@@ -10,12 +10,13 @@ from typing import Any, Callable
 from .eqstr import EqStr
 from .events import EventPattern, render_chat, render_message
 from .network import PROTOCOL_VERSION, INetworkClient, ProtobufNetworkClient
+from .plugin import MQPlugin, load_plugins
 from .proto import headless_pb2 as pb
 from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.3"
+SDK_VERSION = "eqmq/0.4"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -76,6 +77,8 @@ class Bot:
         self._pending: dict[int, asyncio.Future] = {}
         self._handlers: dict[str, list[Callable]] = {"chat": [], "message": [], "line": [], "move": []}
         self._move_waiters: list[asyncio.Future] = []
+        self._commands: dict[str, Callable] = {}
+        self._tlos: dict[str, Callable[[], Any]] = {}
         self._patterns: list[tuple[EventPattern, Callable]] = []
         self.session_id = ""
         self.spawn_id = 0
@@ -274,6 +277,12 @@ class Bot:
         word, _, rest = line.strip().partition(" ")
         word, rest = word.lower(), rest.strip()
 
+        if word in self._commands:
+            result = self._commands[word](rest)
+            if inspect.isawaitable(result):
+                result = await result
+            return result if isinstance(result, CommandResult) else CommandResult(True)
+
         if word in _CHANNEL_COMMANDS:
             return await self.chat(_CHANNEL_COMMANDS[word], rest)
         if word in ("/tell", "/t", "/msg"):
@@ -314,6 +323,44 @@ class Bot:
             # EQEmu bot commands are typed as ^command in say
             return await self.say(rest if rest.startswith("^") else f"^{rest}")
         return CommandResult(False, f"unsupported command {word}")
+
+    # ---- plugins ----
+
+    def register_command(self, name: str, handler: Callable) -> None:
+        """Add a slash command for DoCommand: handler(rest_of_line), sync or async."""
+        if not name.startswith("/"):
+            raise ValueError("command names start with /")
+        self._commands[name.lower()] = handler
+
+    def register_tlo(self, name: str, getter: Callable[[], Any]) -> None:
+        """Add a Top-Level Object, read with bot.TLO(name)."""
+        self._tlos[name] = getter
+
+    def TLO(self, name: str) -> Any:
+        getter = self._tlos.get(name)
+        return getter() if getter else None
+
+    async def run(self, plugins: list[MQPlugin] | str | None = None, frame_ms: int = 100) -> None:
+        """Run plugins until the bot disconnects: on_load, then on_frame every frame, then on_clean.
+
+        plugins may be a list of MQPlugin instances or a directory to load them from.
+        """
+        if isinstance(plugins, str):
+            plugins = load_plugins(plugins, self)
+        plugins = plugins or []
+
+        for p in plugins:
+            await self._call(p.on_load)
+        try:
+            loop = asyncio.get_running_loop()
+            while self.connected:
+                started = loop.time()
+                for p in plugins:
+                    await self._call(p.on_frame)
+                await asyncio.sleep(max(0.0, frame_ms / 1000 - (loop.time() - started)))
+        finally:
+            for p in plugins:
+                await self._call(p.on_clean)
 
     # ---- events ----
 
