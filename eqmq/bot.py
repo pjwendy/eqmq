@@ -16,7 +16,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import Group, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.5"
+SDK_VERSION = "eqmq/0.6"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -54,6 +54,15 @@ class MoveResult:
 
 
 @dataclass(frozen=True)
+class ZoneChange:
+    """A zone change: "LEAVING" (on the way), "ARRIVED" (in Zone, state is fresh) or "REFUSED"."""
+    Status: str
+    Zone: str      # short name
+    ZoneID: int
+    Detail: str = ""
+
+
+@dataclass(frozen=True)
 class CommandResult:
     ok: bool
     error: str = ""
@@ -75,8 +84,10 @@ class Bot:
         self._refused: Refused | None = None
         self._next_id = 1
         self._pending: dict[int, asyncio.Future] = {}
-        self._handlers: dict[str, list[Callable]] = {"chat": [], "message": [], "line": [], "move": []}
+        self._handlers: dict[str, list[Callable]] = {"chat": [], "message": [], "line": [], "move": [], "zone": []}
         self._move_waiters: list[asyncio.Future] = []
+        self._zone_waiters: list[asyncio.Future] = []
+        self._zoning = False
         self._commands: dict[str, Callable] = {}
         self._tlos: dict[str, Callable[[], Any]] = {}
         self._patterns: list[tuple[EventPattern, Callable]] = []
@@ -141,6 +152,11 @@ class Bot:
                     self._state.apply(frame)
                     if self._state.ready:
                         self._ready.set()
+                    if kind == "snapshot" and self._zoning:
+                        # the session survived the zone change: this is the new zone's first state
+                        self._zoning = False
+                        z = frame.snapshot.zone
+                        await self._zone_done(ZoneChange("ARRIVED", z.short_name, z.id))
         finally:
             for fut in self._pending.values():
                 if not fut.done():
@@ -296,6 +312,28 @@ class Bot:
         cmd.disband.SetInParent()
         return await self.command(cmd)
 
+    async def wait_zoned(self, timeout: float = 90) -> ZoneChange:
+        """Wait for the current zone change to finish: ARRIVED or REFUSED ("TIMEOUT" if neither)."""
+        fut = asyncio.get_running_loop().create_future()
+        self._zone_waiters.append(fut)
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            return ZoneChange("TIMEOUT", "", 0, f"no zone change within {timeout:.0f}s")
+
+    async def gm_zone(self, short_name: str, timeout: float = 90) -> ZoneChange:
+        """Zone with the GM command #zone (needs GM status) and wait until in the new zone."""
+        fut = asyncio.get_running_loop().create_future()
+        self._zone_waiters.append(fut)
+        result = await self.say(f"#zone {short_name}")
+        if not result:
+            self._zone_waiters.remove(fut)
+            return ZoneChange("REFUSED", short_name, 0, result.error)
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            return ZoneChange("TIMEOUT", short_name, 0, f"no zone change within {timeout:.0f}s")
+
     def _pos(self) -> tuple[float, float, float]:
         me = self._state.me
         return (me.x, me.y, me.z) if me else (0.0, 0.0, 0.0)
@@ -403,7 +441,8 @@ class Bot:
     # ---- events ----
 
     def on(self, kind: str) -> Callable:
-        """Register a handler: "chat" gets a Chat, "message" a Message, "line" every line, "move" a MoveResult."""
+        """Register a handler: "chat" gets a Chat, "message" a Message, "line" every line, "move" a MoveResult,
+        "zone" a ZoneChange."""
         if kind not in self._handlers:
             raise ValueError(f"unknown event kind {kind!r}; use one of {sorted(self._handlers)}")
 
@@ -431,8 +470,24 @@ class Bot:
         except Exception:
             log.exception("event handler %r failed", fn)
 
+    async def _zone_done(self, change: ZoneChange) -> None:
+        if change.Status != "LEAVING":
+            waiters, self._zone_waiters = self._zone_waiters, []
+            for fut in waiters:
+                if not fut.done():
+                    fut.set_result(change)
+        for fn in self._handlers["zone"]:
+            await self._call(fn, change)
+
     async def _dispatch_event(self, event: pb.GameEvent) -> None:
         kind = event.WhichOneof("event")
+        if kind == "zone":
+            z = event.zone
+            status = pb.ZoneStatus.Name(z.status).removeprefix("ZONE_")
+            if status == "LEAVING":
+                self._zoning = True
+            await self._zone_done(ZoneChange(status, z.zone, z.zone_id, z.detail))
+            return
         if kind == "move":
             m = event.move
             done = MoveResult(pb.MoveStatus.Name(m.status).removeprefix("MOVE_"), m.x, m.y, m.z)

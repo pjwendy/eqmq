@@ -51,6 +51,7 @@
   <label><input type="checkbox" id="names"> Names</label>
   <label title="Fade map and spawns far above or below the bot"><input type="checkbox" id="zfilter"> Height ±<input type="number" id="zrange" value="40" min="5" step="5"></label>
   <input type="text" id="filter" placeholder="Find spawn…">
+  <!--eqmq:controls-->
 </div>
 <div id="legend" class="panel">
   <span style="--c: var(--me)">You</span><span style="--c: var(--pc)">Player</span><span style="--c: var(--npc)">NPC</span>
@@ -119,6 +120,7 @@ async function loadMap() {
   const following = $("follow").checked;
   fit();
   $("follow").checked = following;
+  save();  // fit() unticks follow; keep the user's choice
 }
 
 function zWindow() {
@@ -221,6 +223,7 @@ function connect() {
     if (state.connected && state.zone !== zone) { zone = state.zone; await loadMap(); }
     if (state.connected && $("follow").checked) { view.cx = -state.me.x; view.cy = -state.me.y; }
     updateStatus(); draw(); showTip();
+    document.dispatchEvent(new CustomEvent("eqmq-state", { detail: state }));  // for plugins' controls
   };
   es.onerror = () => { $("status").innerHTML = '<span class="muted">Viewer disconnected, retrying…</span>'; };
 }
@@ -272,5 +275,6 @@ addEventListener("resize", resize);
 resize();
 connect();
 </script>
+<!--eqmq:script-->
 </body>
 </html>
