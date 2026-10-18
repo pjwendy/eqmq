@@ -129,6 +129,44 @@ class Me:
 
 
 @dataclass(frozen=True)
+class GroupMember:
+    Name: str
+    ID: int          # spawn id, 0 if not in this zone
+    Leader: bool
+    Bot: bool        # an EQEmu bot
+
+
+@dataclass(frozen=True)
+class Group:
+    """As MQ2's Group TLO. Member(0) is you; Members counts everyone else."""
+    All: tuple[GroupMember, ...]
+    _me: str = ""
+
+    @property
+    def Members(self) -> int:
+        return max(0, len(self.All) - 1)
+
+    @property
+    def Leader(self) -> GroupMember | None:
+        return next((m for m in self.All if m.Leader), None)
+
+    def Member(self, n: int | str) -> GroupMember | None:
+        """Member(0) is you, Member(1..5) the others; or look one up by name."""
+        if isinstance(n, str):
+            return next((m for m in self.All if m.Name.lower() == n.lower()), None)
+        others = [m for m in self.All if m.Name != self._me]
+        me = [m for m in self.All if m.Name == self._me]
+        ordered = me + others
+        return ordered[n] if 0 <= n < len(ordered) else None
+
+    @staticmethod
+    def from_pb(m: pb.Self) -> "Group | None":
+        if not m.group:
+            return None
+        return Group(tuple(GroupMember(g.name, g.spawn_id, g.leader, g.bot) for g in m.group), _me=m.name)
+
+
+@dataclass(frozen=True)
 class Zone:
     ID: int
     InstanceID: int

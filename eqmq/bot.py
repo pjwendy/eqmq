@@ -14,9 +14,9 @@ from .plugin import MQPlugin, load_plugins
 from .proto import headless_pb2 as pb
 from .search import SpawnSearch
 from .state import StateMirror
-from .tlo import Me, Spawn, Zone
+from .tlo import Group, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.4"
+SDK_VERSION = "eqmq/0.5"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -163,6 +163,16 @@ class Bot:
         me = self._state.me
         return self._state.spawn_tlo(me.target_id) if me and me.target_id else None
 
+    @property
+    def Group(self) -> Group | None:
+        """Your group, or None when not grouped."""
+        return Group.from_pb(self._state.me) if self._state.me else None
+
+    def Bots(self) -> list[Spawn]:
+        """Your spawned EQEmu bots in this zone, nearest first."""
+        me = self._state.me
+        return [s for s in self.Spawns("bot") if me and s.OwnerID == me.spawn_id]
+
     def Spawns(self, search: str = "") -> list[Spawn]:
         """All spawns matching an MQ2 search string, nearest first."""
         q = SpawnSearch.parse(search)
@@ -268,6 +278,24 @@ class Bot:
         cmd.stop.SetInParent()
         return await self.command(cmd)
 
+    async def invite(self, who: Spawn | str | None = None) -> CommandResult:
+        """Invite a player or one of your bots to your group (None: your target), as /invite."""
+        cmd = pb.Command()
+        cmd.invite.name = "" if who is None else (who if isinstance(who, str) else who.Name)
+        return await self.command(cmd)
+
+    async def face(self, spawn: Spawn | int | None = None) -> CommandResult:
+        """Turn to face a spawn (None: your target), as /face. Melee needs you facing your target."""
+        cmd = pb.Command()
+        cmd.face.spawn_id = 0 if spawn is None else (spawn if isinstance(spawn, int) else spawn.ID)
+        return await self.command(cmd)
+
+    async def disband(self) -> CommandResult:
+        """As /disband: removes your target from the group if you lead it, else leaves."""
+        cmd = pb.Command()
+        cmd.disband.SetInParent()
+        return await self.command(cmd)
+
     def _pos(self) -> tuple[float, float, float]:
         me = self._state.me
         return (me.x, me.y, me.z) if me else (0.0, 0.0, 0.0)
@@ -319,6 +347,16 @@ class Bot:
                     return CommandResult(False, f"no spawn with id {parts[1]}")
                 return await self.moveto(spawn.X, spawn.Y, spawn.Z)
             return CommandResult(False, "usage: /moveto loc <y> <x> [z] | /moveto id <n> | /moveto off")
+        if word == "/invite":
+            return await self.invite(rest or None)
+        if word == "/face":
+            # /face (your target) | /face id <n> | /face <spawn search>
+            if not rest:
+                return await self.face()
+            spawn = self.Spawn(rest)
+            return await self.face(spawn) if spawn else CommandResult(False, f"no spawn matches '{rest}'")
+        if word == "/disband":
+            return await self.disband()
         if word == "/bot":
             # EQEmu bot commands are typed as ^command in say
             return await self.say(rest if rest.startswith("^") else f"^{rest}")
