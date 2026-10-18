@@ -5,7 +5,7 @@ import asyncio
 import inspect
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from .eqstr import EqStr
 from .events import EventPattern, render_chat, render_message
@@ -14,9 +14,9 @@ from .plugin import MQPlugin, load_plugins
 from .proto import headless_pb2 as pb
 from .search import SpawnSearch
 from .state import StateMirror
-from .tlo import Group, Me, Spawn, Zone
+from .tlo import CON_COLORS, FACTIONS, BookSpell, Group, Item, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.6"
+SDK_VERSION = "eqmq/0.7"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -29,6 +29,19 @@ _CHANNEL_COMMANDS = {
     "/auction": pb.CHAT_AUCTION, "/auc": pb.CHAT_AUCTION,
     "/rsay": pb.CHAT_RAID,
 }
+
+
+# game text that means a cast failed (as rendered from eqstr_us.txt), and what to report
+_CAST_FAILURES = (
+    ("Your spell fizzles", "fizzled"),
+    ("Your spell is interrupted", "interrupted"),
+    ("Your casting has been interrupted", "interrupted"),
+    ("Insufficient Mana", "not enough mana"),
+    ("You must first select a target", "no target"),
+    ("Your target is out of range", "out of range"),
+    ("You cannot see your target", "can't see the target"),
+    ("You can't cast spells while stunned", "stunned"),
+)
 
 
 class Refused(Exception):
@@ -63,6 +76,43 @@ class ZoneChange:
 
 
 @dataclass(frozen=True)
+class Consider:
+    """A /consider answer. Color is "green", "lightblue", "blue", "white", "yellow", "red" or "grey"."""
+    SpawnID: int
+    Color: str
+    Faction: str
+    PctHPs: int
+
+    @property
+    def Safe(self) -> bool:
+        """An easy fight: green, light blue or blue."""
+        return self.Color in ("green", "lightblue", "blue")
+
+
+@dataclass(frozen=True)
+class LootResult:
+    CorpseID: int
+    ok: bool
+    Error: str = ""
+    Items: tuple = ()     # what we tried to loot; game messages say what we got
+    Platinum: int = 0
+    Gold: int = 0
+    Silver: int = 0
+    Copper: int = 0
+
+    def __bool__(self) -> bool:
+        return self.ok
+
+
+@dataclass(frozen=True)
+class Death:
+    Killer: str
+    CorpseID: int
+    SpellID: int
+    Damage: int
+
+
+@dataclass(frozen=True)
 class CommandResult:
     ok: bool
     error: str = ""
@@ -84,7 +134,10 @@ class Bot:
         self._refused: Refused | None = None
         self._next_id = 1
         self._pending: dict[int, asyncio.Future] = {}
-        self._handlers: dict[str, list[Callable]] = {"chat": [], "message": [], "line": [], "move": [], "zone": []}
+        self._handlers: dict[str, list[Callable]] = {"chat": [], "message": [], "line": [], "move": [], "zone": [],
+                                                     "death": []}
+        self._consider_waiters: dict[int, list[asyncio.Future]] = {}
+        self._loot_waiters: dict[int, list[asyncio.Future]] = {}
         self._move_waiters: list[asyncio.Future] = []
         self._zone_waiters: list[asyncio.Future] = []
         self._zoning = False
@@ -188,6 +241,30 @@ class Bot:
         """Your spawned EQEmu bots in this zone, nearest first."""
         me = self._state.me
         return [s for s in self.Spawns("bot") if me and s.OwnerID == me.spawn_id]
+
+    def Haters(self) -> list[Spawn]:
+        """NPCs that have you on their hate list, nearest first."""
+        me = self._state.me
+        found = [self._state.spawn_tlo(i) for i in (me.haters if me else [])]
+        return sorted((s for s in found if s), key=lambda s: s.Distance)
+
+    def Book(self) -> list[BookSpell]:
+        """Your spellbook, lowest level first."""
+        return sorted(self._state.book, key=lambda s: (s.Level, s.Name))
+
+    def BookSpell(self, name: str) -> BookSpell | None:
+        return next((s for s in self._state.book if s.Name.lower() == name.lower()), None)
+
+    def Inventory(self) -> list[Item]:
+        """Everything you carry: worn, general slots, bags and cursor."""
+        return list(self._state.inventory)
+
+    def FindItem(self, name: str) -> Item | None:
+        """The first carried item whose name contains `name`, as ${FindItem[...]}."""
+        return next((i for i in self._state.inventory if name.lower() in i.Name.lower()), None)
+
+    def FindItemCount(self, name: str) -> int:
+        return sum(max(1, i.Charges) for i in self._state.inventory if name.lower() in i.Name.lower())
 
     def Spawns(self, search: str = "") -> list[Spawn]:
         """All spawns matching an MQ2 search string, nearest first."""
@@ -306,20 +383,166 @@ class Bot:
         cmd.face.spawn_id = 0 if spawn is None else (spawn if isinstance(spawn, int) else spawn.ID)
         return await self.command(cmd)
 
+    async def cast(self, spell: int | str, target: Spawn | int | None = None, wait: bool = False,
+                   timeout: float = 30) -> CommandResult:
+        """Cast the spell in a gem: a gem number (1-based) or a memorised spell's name, as /cast.
+
+        target: who to target first (None keeps your target; with no target you cast on yourself).
+        wait=True returns once the cast has finished (or never started).
+        """
+        me = self.Me
+        gem = me.Gem(spell) if me else None
+        if gem is None:
+            return CommandResult(False, f"{spell!r} is not memorised")
+        if target is not None:
+            await self.target(target)
+            await asyncio.sleep(0.3)  # the target round trip
+        cmd = pb.Command()
+        cmd.cast.gem = gem.Slot - 1
+        cmd.cast.spell_id = gem.ID
+        failure: list[str] = []
+
+        def watch(line: str) -> None:
+            for text, reason in _CAST_FAILURES:
+                if text in line:
+                    failure.append(reason)
+
+        if wait:
+            self._handlers["line"].append(watch)
+        try:
+            result = await self.command(cmd)
+            if not result or not wait:
+                return result
+            loop = asyncio.get_running_loop()
+            start = loop.time()
+            started = False
+            while loop.time() < start + timeout and self.connected and not failure:
+                if self.Me.Casting:
+                    started = True
+                elif started or loop.time() > start + 1.5:
+                    break
+                await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)  # a fizzle or interrupt message may trail the cast
+            if failure:
+                return CommandResult(False, failure[0])
+            return CommandResult(True) if started else CommandResult(False, "the cast didn't start")
+        finally:
+            if watch in self._handlers["line"]:
+                self._handlers["line"].remove(watch)
+
+    async def stopcast(self) -> CommandResult:
+        cmd = pb.Command()
+        cmd.stop_cast.SetInParent()
+        return await self.command(cmd)
+
+    async def memorize(self, gem: int, spell: int | str | None, wait: bool = True, timeout: float = 15) -> CommandResult:
+        """Memorise a spell from your book into gem (1-based); None forgets it. As /memspell."""
+        spell_id = 0
+        if spell is not None:
+            found = self.BookSpell(spell) if isinstance(spell, str) else next(
+                (s for s in self._state.book if s.ID == spell), None)
+            if found is None:
+                return CommandResult(False, f"{spell!r} is not in your spellbook")
+            spell_id = found.ID
+        cmd = pb.Command()
+        cmd.memorize.gem = gem - 1
+        cmd.memorize.spell_id = spell_id
+        result = await self.command(cmd)
+        if not result or not wait:
+            return result
+        deadline = asyncio.get_running_loop().time() + timeout
+        while asyncio.get_running_loop().time() < deadline and self.connected:
+            g = self.Me.Gem(gem)
+            if (g.ID if g else 0) == spell_id and (g is None or g.Ready):
+                return CommandResult(True)
+            await asyncio.sleep(0.2)
+        return CommandResult(False, "memorising didn't finish")
+
+    async def consider(self, spawn: Spawn | int | None = None, timeout: float = 5) -> Consider | None:
+        """/consider a spawn (default: your target). None if no answer came."""
+        spawn_id = (self.Me.TargetID if spawn is None else spawn if isinstance(spawn, int) else spawn.ID)
+        if not spawn_id:
+            return None
+        fut = asyncio.get_running_loop().create_future()
+        self._consider_waiters.setdefault(spawn_id, []).append(fut)
+        cmd = pb.Command()
+        cmd.consider.spawn_id = spawn_id
+        if not await self.command(cmd):
+            self._consider_waiters[spawn_id].remove(fut)
+            return None
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            return None
+
+    async def loot(self, corpse: Spawn | int, timeout: float = 10) -> LootResult:
+        """Loot everything from a corpse (walk within ~10 units first)."""
+        corpse_id = corpse if isinstance(corpse, int) else corpse.ID
+        fut = asyncio.get_running_loop().create_future()
+        self._loot_waiters.setdefault(corpse_id, []).append(fut)
+        cmd = pb.Command()
+        cmd.loot.corpse_id = corpse_id
+        result = await self.command(cmd)
+        if not result:
+            self._loot_waiters[corpse_id].remove(fut)
+            return LootResult(corpse_id, False, result.error)
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            return LootResult(corpse_id, False, "no answer from the corpse")
+
+    async def spawn_bots(self, names: list[str], group: bool = True, pause: float = 1.5) -> list[Spawn]:
+        """Spawn your EQEmu bots (^botspawn) and, by default, invite them so they follow you.
+
+        The server won't spawn bots while you're engaged, so this does nothing then.
+        """
+        if self.Me and self.Me.Engaged:
+            return self.Bots()
+        for name in names:
+            if not any(b.Name.lower() == name.lower() for b in self.Bots()):
+                await self.DoCommand(f"/bot ^botspawn {name}")
+                await asyncio.sleep(pause)
+        await asyncio.sleep(1.0)
+        if group:
+            for attempt in range(2):
+                for b in self.Bots():
+                    g = self.Group
+                    if not (g and g.Member(b.Name)):
+                        if attempt:
+                            # it came back in an old group (e.g. after a death): camp it and try again
+                            await self.DoCommand(f"/bot ^botcamp byname {b.Name}")
+                            await asyncio.sleep(pause)
+                            await self.DoCommand(f"/bot ^botspawn {b.Name}")
+                            await asyncio.sleep(pause)
+                        await self.invite(b.Name)
+                        await asyncio.sleep(0.8)
+                g = self.Group
+                if all(g and g.Member(b.Name) for b in self.Bots()):
+                    break
+        return self.Bots()
+
     async def disband(self) -> CommandResult:
         """As /disband: removes your target from the group if you lead it, else leaves."""
         cmd = pb.Command()
         cmd.disband.SetInParent()
         return await self.command(cmd)
 
-    async def wait_zoned(self, timeout: float = 90) -> ZoneChange:
-        """Wait for the current zone change to finish: ARRIVED or REFUSED ("TIMEOUT" if neither)."""
+    def wait_zoned(self, timeout: float = 90) -> Awaitable[ZoneChange]:
+        """Wait for the next zone change to finish: ARRIVED or REFUSED ("TIMEOUT" if neither).
+
+        It starts listening when called, so call it before the zoning can happen (e.g. in a death
+        handler) and await it later.
+        """
         fut = asyncio.get_running_loop().create_future()
         self._zone_waiters.append(fut)
-        try:
-            return await asyncio.wait_for(fut, timeout)
-        except asyncio.TimeoutError:
-            return ZoneChange("TIMEOUT", "", 0, f"no zone change within {timeout:.0f}s")
+
+        async def wait() -> ZoneChange:
+            try:
+                return await asyncio.wait_for(fut, timeout)
+            except asyncio.TimeoutError:
+                return ZoneChange("TIMEOUT", "", 0, f"no zone change within {timeout:.0f}s")
+
+        return wait()
 
     async def gm_zone(self, short_name: str, timeout: float = 90) -> ZoneChange:
         """Zone with the GM command #zone (needs GM status) and wait until in the new zone."""
@@ -393,6 +616,32 @@ class Bot:
                 return await self.face()
             spawn = self.Spawn(rest)
             return await self.face(spawn) if spawn else CommandResult(False, f"no spawn matches '{rest}'")
+        if word == "/cast":
+            # /cast <gem number> | /cast "Spell Name"
+            what = rest.strip().strip('"')
+            if not what:
+                return CommandResult(False, "usage: /cast <gem> | /cast \"Spell Name\"")
+            return await self.cast(int(what) if what.isdigit() else what)
+        if word == "/stopcast":
+            return await self.stopcast()
+        if word == "/memspell":
+            # /memspell <gem> "Spell Name"
+            gem, _, name = rest.partition(" ")
+            if not gem.isdigit() or not name.strip():
+                return CommandResult(False, "usage: /memspell <gem> \"Spell Name\"")
+            return await self.memorize(int(gem), name.strip().strip('"'))
+        if word in ("/consider", "/con"):
+            spawn = self.Spawn(rest) if rest else self.Target
+            if not spawn:
+                return CommandResult(False, "nothing to consider")
+            con = await self.consider(spawn)
+            return CommandResult(True) if con else CommandResult(False, "no answer")
+        if word == "/loot":
+            corpse = self.Spawn(f"corpse {rest}".strip()) if rest or not self.Target else self.Target
+            if not corpse:
+                return CommandResult(False, "no corpse to loot")
+            res = await self.loot(corpse)
+            return CommandResult(res.ok, res.Error)
         if word == "/disband":
             return await self.disband()
         if word == "/bot":
@@ -442,7 +691,7 @@ class Bot:
 
     def on(self, kind: str) -> Callable:
         """Register a handler: "chat" gets a Chat, "message" a Message, "line" every line, "move" a MoveResult,
-        "zone" a ZoneChange."""
+        "zone" a ZoneChange, "death" a Death (yours)."""
         if kind not in self._handlers:
             raise ValueError(f"unknown event kind {kind!r}; use one of {sorted(self._handlers)}")
 
@@ -481,6 +730,28 @@ class Bot:
 
     async def _dispatch_event(self, event: pb.GameEvent) -> None:
         kind = event.WhichOneof("event")
+        if kind == "consider":
+            c = event.consider
+            spawn = self._state.spawns.get(c.spawn_id)  # the reply's HP fields aren't filled in for NPCs
+            con = Consider(c.spawn_id, CON_COLORS.get(c.color, str(c.color)), FACTIONS.get(c.faction, str(c.faction)),
+                           spawn.hp_pct if spawn else 0)
+            for fut in self._consider_waiters.pop(c.spawn_id, []):
+                if not fut.done():
+                    fut.set_result(con)
+            return
+        if kind == "loot":
+            lt = event.loot
+            res = LootResult(lt.corpse_id, lt.ok, lt.error, tuple(lt.items), lt.platinum, lt.gold, lt.silver, lt.copper)
+            for fut in self._loot_waiters.pop(lt.corpse_id, []):
+                if not fut.done():
+                    fut.set_result(res)
+            return
+        if kind == "death":
+            d = event.death
+            death = Death(d.killer, d.corpse_id, d.spell_id, d.damage)
+            for fn in self._handlers["death"]:
+                await self._call(fn, death)
+            return
         if kind == "zone":
             z = event.zone
             status = pb.ZoneStatus.Name(z.status).removeprefix("ZONE_")

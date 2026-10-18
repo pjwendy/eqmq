@@ -23,6 +23,48 @@ def _pct(cur: int, mx: int) -> int:
     return int(cur * 100 / mx) if mx > 0 else 0
 
 
+# con colours and faction standings, as the client names them
+CON_COLORS = {2: "green", 4: "blue", 6: "grey", 10: "white", 13: "red", 15: "yellow", 18: "lightblue", 20: "white"}
+FACTIONS = {1: "ally", 2: "warmly", 3: "kindly", 4: "amiable", 5: "indifferent", 6: "apprehensive",
+            7: "dubious", 8: "threatening", 9: "scowls"}
+
+
+@dataclass(frozen=True)
+class Gem:
+    Slot: int        # 1-based, as /cast 1 and MQ2's Me.Gem[1]
+    ID: int
+    Name: str
+    Ready: bool      # not refreshing, not casting, not memorising
+
+
+@dataclass(frozen=True)
+class Buff:
+    ID: int
+    Name: str
+    Ticks: int       # 6-second ticks left; -1 permanent
+
+    @property
+    def Duration(self) -> float:
+        """Seconds left (inf if permanent)."""
+        return math.inf if self.Ticks < 0 else self.Ticks * 6.0
+
+
+@dataclass(frozen=True)
+class BookSpell:
+    ID: int
+    Name: str
+    Level: int
+
+
+@dataclass(frozen=True)
+class Item:
+    Slot: int
+    ID: int
+    Name: str
+    Charges: int
+    Container: bool
+
+
 @dataclass(frozen=True)
 class Spawn:
     ID: int
@@ -38,6 +80,7 @@ class Spawn:
     PctHPs: int
     OwnerID: int
     Headless: bool
+    TargetID: int = 0  # who it has targeted; for an NPC in combat, who it's hitting
     _me_x: float = 0.0
     _me_y: float = 0.0
     _me_z: float = 0.0
@@ -67,7 +110,7 @@ class Spawn:
         return Spawn(
             ID=s.id, Name=s.name, Type=type_name, Level=s.level, ClassID=s.class_id,
             RaceID=s.race_id, X=s.x, Y=s.y, Z=s.z, Heading=s.heading, PctHPs=s.hp_pct,
-            OwnerID=s.owner_id, Headless=s.headless, _me_x=me_x, _me_y=me_y, _me_z=me_z,
+            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, _me_x=me_x, _me_y=me_y, _me_z=me_z,
         )
 
 
@@ -92,6 +135,13 @@ class Me:
     Sitting: bool
     Combat: bool       # auto-attack on
     CastingID: int     # 0 if not casting
+    Gems: tuple = ()   # Gem, by slot
+    Buffs: tuple = ()  # Buff
+    Platinum: int = 0
+    Gold: int = 0
+    Silver: int = 0
+    Copper: int = 0
+    Haters: tuple = ()  # spawn ids of NPCs with you on their hate list
 
     @property
     def PctHPs(self) -> int:
@@ -113,6 +163,27 @@ class Me:
     def Casting(self) -> bool:
         return self.CastingID != 0
 
+    def Gem(self, n: int | str) -> Gem | None:
+        """Gem n (1-based), or the gem holding a spell by name (case-insensitive)."""
+        for g in self.Gems:
+            if (isinstance(n, int) and g.Slot == n) or (isinstance(n, str) and g.Name.lower() == n.lower()):
+                return g
+        return None
+
+    def Buff(self, name: str) -> Buff | None:
+        """Your buff whose name contains `name` (case-insensitive)."""
+        return next((b for b in self.Buffs if name.lower() in b.Name.lower()), None)
+
+    @property
+    def Engaged(self) -> bool:
+        """In combat: some NPC has you on its hate list."""
+        return bool(self.Haters)
+
+    @property
+    def Money(self) -> int:
+        """All carried coin, in copper."""
+        return ((self.Platinum * 10 + self.Gold) * 10 + self.Silver) * 10 + self.Copper
+
     @property
     def Loc(self) -> str:
         return f"{self.Y:.2f}, {self.X:.2f}, {self.Z:.2f}"
@@ -125,6 +196,9 @@ class Me:
             CurrentEndurance=m.endurance, MaxEndurance=m.max_endurance, X=m.x, Y=m.y, Z=m.z,
             Heading=m.heading, TargetID=m.target_id, Sitting=m.sitting, Combat=m.auto_attack,
             CastingID=m.casting_spell_id,
+            Gems=tuple(Gem(g.slot + 1, g.spell_id, g.name, g.ready) for g in m.gems),
+            Buffs=tuple(Buff(b.spell_id, b.name, b.ticks) for b in m.buffs),
+            Platinum=m.platinum, Gold=m.gold, Silver=m.silver, Copper=m.copper, Haters=tuple(m.haters),
         )
 
 

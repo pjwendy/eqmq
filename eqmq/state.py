@@ -5,7 +5,7 @@ Scripts only ever see the frozen TLO objects it hands out.
 from __future__ import annotations
 
 from .proto import headless_pb2 as pb
-from .tlo import Me, Spawn, Zone
+from .tlo import BookSpell, Item, Me, Spawn, Zone
 
 
 class StateMirror:
@@ -13,6 +13,8 @@ class StateMirror:
         self.me: pb.Self | None = None
         self.zone: pb.ZoneInfo | None = None
         self.spawns: dict[int, pb.Spawn] = {}
+        self.book: list[BookSpell] = []
+        self.inventory: list[Item] = []
 
     @property
     def ready(self) -> bool:
@@ -27,6 +29,8 @@ class StateMirror:
             self.zone = pb.ZoneInfo()
             self.zone.CopyFrom(snap.zone)
             self.spawns = {s.id: s for s in snap.spawns}
+            self._set_book(snap.book)
+            self._set_inventory(snap.inventory)
         elif kind == "delta":
             delta = frame.delta
             if self.me is None:
@@ -36,6 +40,16 @@ class StateMirror:
                 self.spawns[s.id] = s
             for spawn_id in delta.spawns_removed:
                 self.spawns.pop(spawn_id, None)
+            if delta.HasField("book"):
+                self._set_book(delta.book)
+            if delta.HasField("inventory"):
+                self._set_inventory(delta.inventory)
+
+    def _set_book(self, book: pb.SpellBook) -> None:
+        self.book = [BookSpell(s.spell_id, s.name, s.level) for s in book.spells]
+
+    def _set_inventory(self, inventory: pb.Inventory) -> None:
+        self.inventory = [Item(i.slot, i.item_id, i.name, i.charges, i.container) for i in inventory.items]
 
     # ---- frozen views ----
 
