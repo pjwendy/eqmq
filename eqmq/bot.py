@@ -15,7 +15,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.2"
+SDK_VERSION = "eqmq/0.3"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -40,6 +40,19 @@ class Refused(Exception):
 
 
 @dataclass(frozen=True)
+class MoveResult:
+    """How a /moveto ended: "ARRIVED", "STOPPED", "STUCK", "NO_PATH" or "ZONE_LINE"."""
+    Status: str
+    X: float
+    Y: float
+    Z: float
+
+    @property
+    def Loc(self) -> str:
+        return f"{self.Y:.2f}, {self.X:.2f}, {self.Z:.2f}"
+
+
+@dataclass(frozen=True)
 class CommandResult:
     ok: bool
     error: str = ""
@@ -61,7 +74,8 @@ class Bot:
         self._refused: Refused | None = None
         self._next_id = 1
         self._pending: dict[int, asyncio.Future] = {}
-        self._handlers: dict[str, list[Callable]] = {"chat": [], "message": [], "line": []}
+        self._handlers: dict[str, list[Callable]] = {"chat": [], "message": [], "line": [], "move": []}
+        self._move_waiters: list[asyncio.Future] = []
         self._patterns: list[tuple[EventPattern, Callable]] = []
         self.session_id = ""
         self.spawn_id = 0
@@ -220,6 +234,41 @@ class Bot:
     async def stand(self) -> CommandResult:
         return await self.sit(False)
 
+    async def moveto(self, x: float, y: float, z: float | None = None, wait: bool = False,
+                     timeout: float = 300) -> CommandResult | MoveResult:
+        """Walk to a point (in-game x, y, z; /loc prints y first) along the navmesh at run speed.
+
+        With wait=True, returns the MoveResult when the walk ends instead of the CommandResult.
+        z defaults to your current height; the server keeps you on the floor either way.
+        """
+        me = self._state.me
+        cmd = pb.Command()
+        cmd.move_to.x, cmd.move_to.y = x, y
+        cmd.move_to.z = z if z is not None else (me.z if me else 0.0)
+        if not wait:
+            return await self.command(cmd)
+        fut = asyncio.get_running_loop().create_future()
+        self._move_waiters.append(fut)
+        result = await self.command(cmd)
+        if not result:
+            self._move_waiters.remove(fut)
+            return result
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            await self.stop()
+            return MoveResult("STOPPED", *(self._pos()))
+
+    async def stop(self) -> CommandResult:
+        """Stop walking."""
+        cmd = pb.Command()
+        cmd.stop.SetInParent()
+        return await self.command(cmd)
+
+    def _pos(self) -> tuple[float, float, float]:
+        me = self._state.me
+        return (me.x, me.y, me.z) if me else (0.0, 0.0, 0.0)
+
     async def DoCommand(self, line: str) -> CommandResult:
         """Run an MQ2/EQ-style slash command, e.g. "/target id 123" or "/tell Eboola hi"."""
         word, _, rest = line.strip().partition(" ")
@@ -243,6 +292,24 @@ class Bot:
             return await self.sit(rest.lower() != "off")
         if word == "/stand":
             return await self.stand()
+        if word == "/moveto":
+            # MQ2 MoveUtils syntax: /moveto loc <y> <x> [z] | /moveto id <spawn id> | /moveto off
+            parts = rest.split()
+            if parts and parts[0].lower() == "off":
+                return await self.stop()
+            if len(parts) >= 3 and parts[0].lower() == "loc":
+                try:
+                    y, x = float(parts[1]), float(parts[2])
+                    z = float(parts[3]) if len(parts) > 3 else None
+                except ValueError:
+                    return CommandResult(False, "usage: /moveto loc <y> <x> [z]")
+                return await self.moveto(x, y, z)
+            if len(parts) == 2 and parts[0].lower() == "id":
+                spawn = self.Spawn(f"id {parts[1]}")
+                if not spawn:
+                    return CommandResult(False, f"no spawn with id {parts[1]}")
+                return await self.moveto(spawn.X, spawn.Y, spawn.Z)
+            return CommandResult(False, "usage: /moveto loc <y> <x> [z] | /moveto id <n> | /moveto off")
         if word == "/bot":
             # EQEmu bot commands are typed as ^command in say
             return await self.say(rest if rest.startswith("^") else f"^{rest}")
@@ -251,7 +318,7 @@ class Bot:
     # ---- events ----
 
     def on(self, kind: str) -> Callable:
-        """Register a handler: @bot.on("chat") gets a Chat, "message" a Message, "line" every line."""
+        """Register a handler: "chat" gets a Chat, "message" a Message, "line" every line, "move" a MoveResult."""
         if kind not in self._handlers:
             raise ValueError(f"unknown event kind {kind!r}; use one of {sorted(self._handlers)}")
 
@@ -281,6 +348,16 @@ class Bot:
 
     async def _dispatch_event(self, event: pb.GameEvent) -> None:
         kind = event.WhichOneof("event")
+        if kind == "move":
+            m = event.move
+            done = MoveResult(pb.MoveStatus.Name(m.status).removeprefix("MOVE_"), m.x, m.y, m.z)
+            waiters, self._move_waiters = self._move_waiters, []
+            for fut in waiters:
+                if not fut.done():
+                    fut.set_result(done)
+            for fn in self._handlers["move"]:
+                await self._call(fn, done)
+            return
         if kind == "chat":
             item = render_chat(event.chat)
             handlers = self._handlers["chat"]
