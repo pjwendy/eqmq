@@ -12,3 +12,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["eqmq*"]
+
+[tool.setuptools.package-data]
+"eqmq.viewer" = ["index.html"]
