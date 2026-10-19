@@ -151,6 +151,7 @@ class Bot:
         self._loot_waiters: dict[int, list[asyncio.Future]] = {}
         self._merchant_waiters: dict[int, list[asyncio.Future]] = {}
         self._move_waiters: list[asyncio.Future] = []
+        self._plan_waiters: list[asyncio.Future] = []
         self._zone_waiters: list[asyncio.Future] = []
         self._zoning = False
         self._commands: dict[str, Callable] = {}
@@ -388,6 +389,24 @@ class Bot:
         except asyncio.TimeoutError:
             await self.stop()
             return MoveResult("STOPPED", *(self._pos()))
+
+    async def route_length(self, x: float, y: float, z: float | None = None, timeout: float = 5) -> float | None:
+        """How far a walk to (in-game x, y, z) would be along the navmesh, without walking; None if
+        there's no way there. A walk under way carries on."""
+        me = self._state.me
+        cmd = pb.Command()
+        cmd.move_to.x, cmd.move_to.y = x, y
+        cmd.move_to.z = z if z is not None else (me.z if me else 0.0)
+        cmd.move_to.plan_only = True
+        fut = asyncio.get_running_loop().create_future()
+        self._plan_waiters.append(fut)
+        if not await self.command(cmd):
+            self._plan_waiters.remove(fut)
+            return None
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            return None
 
     async def stop(self) -> CommandResult:
         """Stop walking."""
@@ -914,6 +933,14 @@ class Bot:
             if status == "LEAVING":
                 self._zoning = True
             await self._zone_done(ZoneChange(status, z.zone, z.zone_id, z.detail))
+            return
+        if kind == "move" and event.move.plan_only:
+            m = event.move
+            length = m.route_length if m.status == pb.MOVE_ARRIVED else None
+            waiters, self._plan_waiters = self._plan_waiters, []
+            for fut in waiters:
+                if not fut.done():
+                    fut.set_result(length)
             return
         if kind == "move":
             m = event.move
