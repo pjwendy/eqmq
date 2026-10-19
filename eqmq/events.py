@@ -47,13 +47,26 @@ def render_chat(c: pb.ChatMessage) -> Chat:
         line = f"You told {c.to}, '{c.text}'"
     else:
         line = f"{sender} {_CHAT_VERBS.get(c.channel, 'says')}, '{c.text}'"
-    return Chat(Channel=channel, From=sender, To=c.to, Text=c.text, Line=line)
+    return Chat(Channel=channel, From=sender, To=c.to, Text=strip_links(c.text), Line=strip_links(line))
+
+
+# EQ links (items, say links):  + a 56-character hex link body + the visible text + .
+# Some arrive without the  markers once rendered from eqstr.
+_LINK = re.compile(r"[0-9A-F]{56}(.*?)|(?<![0-9A-Za-z])[0-9A-F]{56}(?=[A-Z])")
+
+
+def strip_links(text: str) -> str:
+    """Game text as the client shows it: links reduced to their visible text."""
+    if "" not in text and len(text) < 56:
+        return text
+    return _LINK.sub(lambda m: m.group(1) or "", text).replace("", "")
 
 
 def render_message(m: pb.ServerMessage, eqstr: EqStr) -> Message:
     if m.string_id:
-        return Message(Type=m.type, Line=eqstr.format(m.string_id, list(m.args)), StringID=m.string_id)
-    text, sayer = m.text, m.sayer
+        return Message(Type=m.type, Line=strip_links(eqstr.format(m.string_id, [strip_links(a) for a in m.args])),
+                       StringID=m.string_id)
+    text, sayer = strip_links(m.text), m.sayer
     if not sayer or m.speak_mode in (0, 3):
         line = text
     elif m.speak_mode == 2:
