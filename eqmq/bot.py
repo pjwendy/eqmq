@@ -16,7 +16,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.10"
+SDK_VERSION = "eqmq/0.11"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -271,8 +271,16 @@ class Bot:
         return next((s for s in self._state.book if s.Name.lower() == name.lower()), None)
 
     def Inventory(self) -> list[Item]:
-        """Everything you carry: worn, general slots, bags and cursor."""
-        return list(self._state.inventory)
+        """Everything you carry: worn, general slots, bags and cursor (not the bank)."""
+        return [i for i in self._state.inventory if not i.Banked]
+
+    def Bank(self) -> list[Item]:
+        """What's in your bank (slots 2000-2023 and the bags in them)."""
+        return [i for i in self._state.inventory if i.Banked]
+
+    def free_book_slot(self) -> int | None:
+        used = {s.Slot for s in self._state.book}
+        return next((i for i in range(720) if i not in used), None)
 
     def FindItem(self, name: str) -> Item | None:
         """The first carried item whose name contains `name`, as ${FindItem[...]}."""
@@ -573,6 +581,22 @@ class Bot:
             if now != before:
                 return CommandResult(True)
         return CommandResult(False, f"{bot_name} didn't take it")
+
+    async def scribe(self, scroll: Item, book_slot: int | None = None) -> CommandResult:
+        """Scribe a spell scroll from your inventory into the spellbook, as the client: pick it up,
+        write it into a free page."""
+        page = self.free_book_slot() if book_slot is None else book_slot
+        if page is None:
+            return CommandResult(False, "the spellbook is full")
+        if scroll.Slot != CURSOR_SLOT:
+            moved = await self.move_item(scroll.Slot, CURSOR_SLOT)
+            if not moved:
+                return moved
+            await asyncio.sleep(0.5)
+        cmd = pb.Command()
+        cmd.scribe.book_slot = page
+        cmd.scribe.spell_id = scroll.ScrollSpell
+        return await self.command(cmd)
 
     async def spawn_bots(self, names: list[str], group: bool = True, pause: float = 1.5) -> list[Spawn]:
         """Spawn your EQEmu bots (^botspawn) and, by default, invite them so they follow you.

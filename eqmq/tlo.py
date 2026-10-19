@@ -54,6 +54,7 @@ class BookSpell:
     ID: int
     Name: str
     Level: int
+    Slot: int = 0  # its page in the book
 
 
 # EQ inventory slots (RoF2 numbering, as the server uses)
@@ -64,6 +65,8 @@ WORN_SLOTS = {"charm": 0, "ear1": 1, "head": 2, "face": 3, "ear2": 4, "neck": 5,
 GENERAL_SLOTS = tuple(range(23, 33))  # the ten top-level bag slots
 CURSOR_SLOT = 33
 BAG_SLOTS_BEGIN = 4010                 # general bag contents: 4010 + (general slot - 23) * 200 + index
+BANK_SLOTS = tuple(range(2000, 2024))  # the bank's 24 slots (use them next to a banker)
+BANK_BAGS_BEGIN = 2031                 # bank bag contents: 2031 + (bank slot - 2000) * 200 + index
 
 
 @dataclass(frozen=True)
@@ -99,6 +102,12 @@ class Item:
     Usable: bool = False  # its holder (you, or the bot wearing it) can wear it at its level
     Classes: int = 0      # bitmask: bit (class - 1)
     Races: int = 0        # bitmask of EQ race bits (see RaceBit on Me / BotGear)
+    ScrollSpell: int = 0  # a spell scroll: the spell it teaches
+    ScrollLevel: int = 0  # ... the level your class learns it (0: not your class)
+
+    @property
+    def Banked(self) -> bool:
+        return 2000 <= self.Slot <= 2023 or 2031 <= self.Slot < 2031 + 24 * 200
 
     def UsableBy(self, class_id: int, race_bit: int, level: int) -> bool:
         """Whether someone of this class, race and level could wear it."""
@@ -116,7 +125,7 @@ class Item:
         return Item(i.slot, i.item_id, i.name, i.charges, i.container, i.ac, i.hp, i.mana, i.endurance, i.str,
                     i.sta, i.agi, i.dex, i.wis, getattr(i, "int"), i.cha, i.damage, i.delay, i.slots, i.req_level,
                     i.weight, i.price, i.no_drop, i.lore, i.magic, i.bag_slots, i.bag_size, i.item_type, i.usable,
-                    i.classes, i.races)
+                    i.classes, i.races, i.scroll_spell, i.scroll_level)
 
 
 @dataclass(frozen=True)

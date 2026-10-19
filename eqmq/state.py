@@ -50,10 +50,10 @@ class StateMirror:
                 self.bot_gear = [BotGear.from_pb(b) for b in delta.bots.bots]
 
     def _set_book(self, book: pb.SpellBook) -> None:
-        self.book = [BookSpell(s.spell_id, s.name, s.level) for s in book.spells]
+        self.book = [BookSpell(s.spell_id, s.name, s.level, s.slot) for s in book.spells]
 
     def _set_inventory(self, inventory: pb.Inventory) -> None:
-        self.inventory = [Item.from_pb(i) for i in inventory.items]
+        self.inventory = [Item.from_pb(i) for i in inventory.items]  # carried and banked
 
     # ---- frozen views ----
 
