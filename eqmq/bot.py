@@ -16,7 +16,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.12"
+SDK_VERSION = "eqmq/0.13"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -124,6 +124,19 @@ class Death:
 
 
 @dataclass(frozen=True)
+class SkillUp:
+    """A skill (or language: SkillID 100 and up) went up to Value."""
+    SkillID: int
+    Name: str
+    Value: int
+
+    @property
+    def Line(self) -> str:
+        """What the client prints for it."""
+        return f"You have become better at {self.Name}! ({self.Value})"
+
+
+@dataclass(frozen=True)
 class CommandResult:
     ok: bool
     error: str = ""
@@ -146,7 +159,7 @@ class Bot:
         self._next_id = 1
         self._pending: dict[int, asyncio.Future] = {}
         self._handlers: dict[str, list[Callable]] = {"chat": [], "message": [], "line": [], "move": [], "zone": [],
-                                                     "death": []}
+                                                     "death": [], "skill": []}
         self._consider_waiters: dict[int, list[asyncio.Future]] = {}
         self._loot_waiters: dict[int, list[asyncio.Future]] = {}
         self._merchant_waiters: dict[int, list[asyncio.Future]] = {}
@@ -853,7 +866,7 @@ class Bot:
 
     def on(self, kind: str) -> Callable:
         """Register a handler: "chat" gets a Chat, "message" a Message, "line" every line, "move" a MoveResult,
-        "zone" a ZoneChange, "death" a Death (yours)."""
+        "zone" a ZoneChange, "death" a Death (yours), "skill" a SkillUp (also a line, as the client prints it)."""
         if kind not in self._handlers:
             raise ValueError(f"unknown event kind {kind!r}; use one of {sorted(self._handlers)}")
 
@@ -920,6 +933,18 @@ class Bot:
             for fut in self._loot_waiters.pop(lt.corpse_id, []):
                 if not fut.done():
                     fut.set_result(res)
+            return
+        if kind == "skill":
+            sk = event.skill
+            up = SkillUp(sk.skill_id, sk.name, sk.value)
+            for fn in self._handlers["skill"]:
+                await self._call(fn, up)
+            for fn in self._handlers["line"]:  # as the client prints it, for #event and line watchers
+                await self._call(fn, up.Line)
+            for pattern, fn in self._patterns:
+                captures = pattern.match(up.Line)
+                if captures is not None:
+                    await self._call(fn, *captures)
             return
         if kind == "death":
             d = event.death

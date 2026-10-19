@@ -4,7 +4,8 @@
     print(bot.Me.Name, bot.Me.PctHPs, bot.Zone.ShortName)
     print(bot.Spawn("npc radius 50"))
 """
-from .bot import SDK_VERSION, Bot, CommandResult, Consider, Death, LootResult, Merchant, MoveResult, Refused, ZoneChange, connect
+from .bot import (SDK_VERSION, Bot, CommandResult, Consider, Death, LootResult, Merchant, MoveResult, Refused, SkillUp,
+                  ZoneChange, connect)
 from .events import Chat, Message
 from .network import INetworkClient, ProtobufNetworkClient
 from .plugin import MQPlugin, load_plugins
@@ -14,7 +15,7 @@ from .tlo import (BAG_SLOTS_BEGIN, BANK_BAGS_BEGIN, BANK_SLOTS, CURSOR_SLOT, GEN
                   GroupMember, Item, Me, Spawn, Zone, ZoneExit, BotGear)
 
 __all__ = [
-    "Bot", "Refused", "CommandResult", "MoveResult", "ZoneChange", "Consider", "LootResult", "Death",
+    "Bot", "Refused", "CommandResult", "MoveResult", "ZoneChange", "Consider", "LootResult", "Death", "SkillUp",
     "Gem", "Buff", "BookSpell", "Item", "ZoneExit", "Merchant", "BotGear",
     "WORN_SLOTS", "GENERAL_SLOTS", "CURSOR_SLOT", "BAG_SLOTS_BEGIN", "BANK_SLOTS", "BANK_BAGS_BEGIN", "connect", "INetworkClient", "ProtobufNetworkClient",
     "Me", "Spawn", "Zone", "Group", "GroupMember", "Chat", "Message", "SDK_VERSION", "MQPlugin", "load_plugins",
