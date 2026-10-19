@@ -55,7 +55,8 @@ class Refused(Exception):
 
 @dataclass(frozen=True)
 class MoveResult:
-    """How a /moveto ended: "ARRIVED", "STOPPED", "STUCK", "NO_PATH" or "ZONE_LINE"."""
+    """How a /moveto ended: "ARRIVED", "STOPPED", "STUCK", "NO_PATH", "ZONE_LINE" or "LOCKED" (a door
+    on the way that it has no key for)."""
     Status: str
     X: float
     Y: float
