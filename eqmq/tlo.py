@@ -241,12 +241,26 @@ class Group:
 
 
 @dataclass(frozen=True)
+class ZoneExit:
+    Zone: str          # short name of the zone it leads to
+    ZoneID: int
+    X: float           # where the zone line is; +-999999 means "anywhere along this axis"
+    Y: float
+    Z: float
+
+
+@dataclass(frozen=True)
 class Zone:
     ID: int
     InstanceID: int
     ShortName: str
     Name: str          # long name, as MQ2's Zone.Name
+    Exits: tuple = ()  # ZoneExit, one per neighbouring zone
+
+    def Exit(self, short_name: str) -> "ZoneExit | None":
+        return next((e for e in self.Exits if e.Zone.lower() == short_name.lower()), None)
 
     @staticmethod
     def from_pb(z: pb.ZoneInfo) -> "Zone":
-        return Zone(ID=z.id, InstanceID=z.instance_id, ShortName=z.short_name, Name=z.long_name)
+        return Zone(ID=z.id, InstanceID=z.instance_id, ShortName=z.short_name, Name=z.long_name,
+                    Exits=tuple(ZoneExit(e.zone, e.zone_id, e.x, e.y, e.z) for e in z.exits))

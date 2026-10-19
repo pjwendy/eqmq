@@ -10,11 +10,11 @@ from .network import INetworkClient, ProtobufNetworkClient
 from .plugin import MQPlugin, load_plugins
 from .proto.headless_pb2 import (CHAT_AUCTION, CHAT_GROUP, CHAT_GUILD, CHAT_OOC, CHAT_RAID, CHAT_SAY,
                                  CHAT_SHOUT, CHAT_TELL)
-from .tlo import Buff, BookSpell, Gem, Group, GroupMember, Item, Me, Spawn, Zone
+from .tlo import Buff, BookSpell, Gem, Group, GroupMember, Item, Me, Spawn, Zone, ZoneExit
 
 __all__ = [
     "Bot", "Refused", "CommandResult", "MoveResult", "ZoneChange", "Consider", "LootResult", "Death",
-    "Gem", "Buff", "BookSpell", "Item", "connect", "INetworkClient", "ProtobufNetworkClient",
+    "Gem", "Buff", "BookSpell", "Item", "ZoneExit", "connect", "INetworkClient", "ProtobufNetworkClient",
     "Me", "Spawn", "Zone", "Group", "GroupMember", "Chat", "Message", "SDK_VERSION", "MQPlugin", "load_plugins",
     "CHAT_SAY", "CHAT_TELL", "CHAT_GROUP", "CHAT_GUILD", "CHAT_OOC", "CHAT_SHOUT", "CHAT_AUCTION", "CHAT_RAID",
 ]

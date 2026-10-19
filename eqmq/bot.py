@@ -16,7 +16,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import CON_COLORS, FACTIONS, BookSpell, Group, Item, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.7"
+SDK_VERSION = "eqmq/0.8"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -544,6 +544,20 @@ class Bot:
 
         return wait()
 
+    async def zone_to(self, short_name: str, timeout: float = 300) -> ZoneChange:
+        """Walk to this zone's zone line for a neighbouring zone (see Zone.Exits) and through it.
+
+        Returns once you're in the new zone (ARRIVED), or why not (REFUSED, TIMEOUT).
+        """
+        done = self.wait_zoned(timeout)  # listening before we start walking
+        cmd = pb.Command()
+        cmd.zone_to.zone = short_name
+        result = await self.command(cmd)
+        if not result:
+            done.close()
+            return ZoneChange("REFUSED", short_name, 0, result.error)
+        return await done
+
     async def gm_zone(self, short_name: str, timeout: float = 90) -> ZoneChange:
         """Zone with the GM command #zone (needs GM status) and wait until in the new zone."""
         fut = asyncio.get_running_loop().create_future()
@@ -642,6 +656,12 @@ class Bot:
                 return CommandResult(False, "no corpse to loot")
             res = await self.loot(corpse)
             return CommandResult(res.ok, res.Error)
+        if word in ("/travelto", "/zoneto"):
+            # MQ2's /travelto, one zone hop: walk through the zone line to a neighbouring zone
+            if not rest:
+                return CommandResult(False, "usage: /travelto <zone short name>")
+            change = await self.zone_to(rest.split()[0])
+            return CommandResult(change.Status == "ARRIVED", change.Detail if change.Status != "ARRIVED" else "")
         if word == "/disband":
             return await self.disband()
         if word == "/bot":
