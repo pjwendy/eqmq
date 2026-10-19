@@ -16,7 +16,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.11"
+SDK_VERSION = "eqmq/0.12"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -566,21 +566,36 @@ class Bot:
         worn slot. Whatever it wore there comes back to your cursor. Not while engaged."""
         from_slot = item if isinstance(item, int) else item.Slot
         if from_slot != CURSOR_SLOT:
+            # the bot gets whatever is on the cursor, so it must be empty first
+            if any(i.Slot == CURSOR_SLOT for i in self.Inventory()):
+                return CommandResult(False, "something else is on the cursor")
             moved = await self.move_item(from_slot, CURSOR_SLOT)
             if not moved:
                 return moved
             await asyncio.sleep(0.5)
         before = next((b.Equipment for b in self.BotGear() if b.Name.lower() == bot_name.lower()), ())
-        result = await self.DoCommand(f"/bot ^inventorygive byname {bot_name}" + (f" {slot}" if slot is not None else ""))
-        if not result:
-            return result
-        deadline = asyncio.get_running_loop().time() + timeout
-        while asyncio.get_running_loop().time() < deadline:
-            await asyncio.sleep(0.3)
-            now = next((b.Equipment for b in self.BotGear() if b.Name.lower() == bot_name.lower()), ())
-            if now != before:
-                return CommandResult(True)
-        return CommandResult(False, f"{bot_name} didn't take it")
+        said: list[str] = []
+
+        def watch(line: str) -> None:  # what the server or the bot says about it
+            low = line.lower()
+            if bot_name.lower() in low or any(w in low for w in ("trade", "engaged", "cannot", "can't", "unable", "lore")):
+                said.append(line)
+
+        self._handlers["line"].append(watch)
+        try:
+            result = await self.DoCommand(f"/bot ^inventorygive byname {bot_name}" + (f" {slot}" if slot is not None else ""))
+            if not result:
+                return result
+            deadline = asyncio.get_running_loop().time() + timeout
+            while asyncio.get_running_loop().time() < deadline:
+                await asyncio.sleep(0.3)
+                now = next((b.Equipment for b in self.BotGear() if b.Name.lower() == bot_name.lower()), ())
+                if now != before:
+                    return CommandResult(True)
+            return CommandResult(False, f"{bot_name} didn't take it" + (f": {said[-1]}" if said else " (nothing said)"))
+        finally:
+            if watch in self._handlers["line"]:
+                self._handlers["line"].remove(watch)
 
     async def scribe(self, scroll: Item, book_slot: int | None = None) -> CommandResult:
         """Scribe a spell scroll from your inventory into the spellbook, as the client: pick it up,

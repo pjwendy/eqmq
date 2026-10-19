@@ -66,7 +66,8 @@ GENERAL_SLOTS = tuple(range(23, 33))  # the ten top-level bag slots
 CURSOR_SLOT = 33
 BAG_SLOTS_BEGIN = 4010                 # general bag contents: 4010 + (general slot - 23) * 200 + index
 BANK_SLOTS = tuple(range(2000, 2024))  # the bank's 24 slots (use them next to a banker)
-BANK_BAGS_BEGIN = 2031                 # bank bag contents: 2031 + (bank slot - 2000) * 200 + index
+BANK_BAGS_BEGIN = 6210                 # bank bag contents: 6210 + (bank slot - 2000) * 200 + index
+# (the server's numbering: 200 per bag; carried bags 4010-6009, the cursor's bag 6010-6209)
 
 
 @dataclass(frozen=True)
@@ -107,7 +108,7 @@ class Item:
 
     @property
     def Banked(self) -> bool:
-        return 2000 <= self.Slot <= 2023 or 2031 <= self.Slot < 2031 + 24 * 200
+        return 2000 <= self.Slot <= 2023 or BANK_BAGS_BEGIN <= self.Slot < BANK_BAGS_BEGIN + 24 * 200
 
     def UsableBy(self, class_id: int, race_bit: int, level: int) -> bool:
         """Whether someone of this class, race and level could wear it."""
