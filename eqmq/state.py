@@ -64,7 +64,7 @@ class StateMirror:
         return Zone.from_pb(self.zone) if self.zone else None
 
     def spawn_tlo(self, spawn_id: int) -> Spawn | None:
-        s = self.spawns.get(spawn_id)
+        s = self.spawns.get(spawn_id) if spawn_id else None  # nothing real has id 0
         if s is None or self.me is None:
             return None
         return Spawn.from_pb(s, self.me.x, self.me.y, self.me.z)
@@ -73,4 +73,4 @@ class StateMirror:
         if self.me is None:
             return []
         mx, my, mz = self.me.x, self.me.y, self.me.z
-        return [Spawn.from_pb(s, mx, my, mz) for s in self.spawns.values()]
+        return [Spawn.from_pb(s, mx, my, mz) for i, s in self.spawns.items() if i and s.id]
