@@ -96,7 +96,13 @@ class Item:
     BagSlots: int = 0
     BagSize: int = 0
     ItemType: int = 0
-    Usable: bool = False  # your race and class can wear it, and you're high enough level
+    Usable: bool = False  # its holder (you, or the bot wearing it) can wear it at its level
+    Classes: int = 0      # bitmask: bit (class - 1)
+    Races: int = 0        # bitmask of EQ race bits (see RaceBit on Me / BotGear)
+
+    def UsableBy(self, class_id: int, race_bit: int, level: int) -> bool:
+        """Whether someone of this class, race and level could wear it."""
+        return bool(self.Slots) and bool(self.Classes & (1 << (class_id - 1))) and             bool(self.Races & race_bit) and self.ReqLevel <= level
 
     @property
     def Worn(self) -> bool:
@@ -109,7 +115,28 @@ class Item:
     def from_pb(i: pb.Item) -> "Item":
         return Item(i.slot, i.item_id, i.name, i.charges, i.container, i.ac, i.hp, i.mana, i.endurance, i.str,
                     i.sta, i.agi, i.dex, i.wis, getattr(i, "int"), i.cha, i.damage, i.delay, i.slots, i.req_level,
-                    i.weight, i.price, i.no_drop, i.lore, i.magic, i.bag_slots, i.bag_size, i.item_type, i.usable)
+                    i.weight, i.price, i.no_drop, i.lore, i.magic, i.bag_slots, i.bag_size, i.item_type, i.usable,
+                    i.classes, i.races)
+
+
+@dataclass(frozen=True)
+class BotGear:
+    """One of your EQEmu bots and what it wears (Item.Slot is the worn slot)."""
+    ID: int
+    Name: str
+    ClassID: int
+    RaceID: int
+    Level: int
+    RaceBit: int
+    Equipment: tuple = ()
+
+    def Worn(self, slot: int) -> "Item | None":
+        return next((i for i in self.Equipment if i.Slot == slot), None)
+
+    @staticmethod
+    def from_pb(b: pb.BotGear) -> "BotGear":
+        return BotGear(b.spawn_id, b.name, b.class_id, b.race_id, b.level, b.race_bit,
+                       tuple(Item.from_pb(i) for i in b.equipment))
 
 
 @dataclass(frozen=True)
@@ -191,6 +218,7 @@ class Me:
     Haters: tuple = ()  # spawn ids of NPCs with you on their hate list
     Weight: int = 0     # carried weight
     Capacity: int = 0   # carry more than this (your STR) and you're encumbered
+    RaceBit: int = 0    # your bit in Item.Races
 
     @property
     def PctHPs(self) -> int:
@@ -252,7 +280,7 @@ class Me:
             Gems=tuple(Gem(g.slot + 1, g.spell_id, g.name, g.ready) for g in m.gems),
             Buffs=tuple(Buff(b.spell_id, b.name, b.ticks) for b in m.buffs),
             Platinum=m.platinum, Gold=m.gold, Silver=m.silver, Copper=m.copper, Haters=tuple(m.haters),
-            Weight=m.weight, Capacity=m.capacity,
+            Weight=m.weight, Capacity=m.capacity, RaceBit=m.race_bit,
         )
 
 

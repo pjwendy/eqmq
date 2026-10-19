@@ -5,7 +5,7 @@ Scripts only ever see the frozen TLO objects it hands out.
 from __future__ import annotations
 
 from .proto import headless_pb2 as pb
-from .tlo import BookSpell, Item, Me, Spawn, Zone
+from .tlo import BookSpell, BotGear, Item, Me, Spawn, Zone
 
 
 class StateMirror:
@@ -15,6 +15,7 @@ class StateMirror:
         self.spawns: dict[int, pb.Spawn] = {}
         self.book: list[BookSpell] = []
         self.inventory: list[Item] = []
+        self.bot_gear: list[BotGear] = []
 
     @property
     def ready(self) -> bool:
@@ -31,6 +32,7 @@ class StateMirror:
             self.spawns = {s.id: s for s in snap.spawns}
             self._set_book(snap.book)
             self._set_inventory(snap.inventory)
+            self.bot_gear = [BotGear.from_pb(b) for b in snap.bots.bots]
         elif kind == "delta":
             delta = frame.delta
             if self.me is None:
@@ -44,6 +46,8 @@ class StateMirror:
                 self._set_book(delta.book)
             if delta.HasField("inventory"):
                 self._set_inventory(delta.inventory)
+            if delta.HasField("bots"):
+                self.bot_gear = [BotGear.from_pb(b) for b in delta.bots.bots]
 
     def _set_book(self, book: pb.SpellBook) -> None:
         self.book = [BookSpell(s.spell_id, s.name, s.level) for s in book.spells]

@@ -14,9 +14,9 @@ from .plugin import MQPlugin, load_plugins
 from .proto import headless_pb2 as pb
 from .search import SpawnSearch
 from .state import StateMirror
-from .tlo import CON_COLORS, FACTIONS, BookSpell, Group, Item, Me, Spawn, Zone
+from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.9"
+SDK_VERSION = "eqmq/0.10"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -258,6 +258,10 @@ class Bot:
         me = self._state.me
         found = [self._state.spawn_tlo(i) for i in (me.haters if me else [])]
         return sorted((s for s in found if s), key=lambda s: s.Distance)
+
+    def BotGear(self) -> list[BotGear]:
+        """Your spawned EQEmu bots and what each one wears."""
+        return list(self._state.bot_gear)
 
     def Book(self) -> list[BookSpell]:
         """Your spellbook, lowest level first."""
@@ -547,6 +551,28 @@ class Bot:
         cmd.move_item.to_slot = to_slot
         cmd.move_item.quantity = quantity
         return await self.command(cmd)
+
+    async def give_to_bot(self, bot_name: str, item: Item | int, slot: int | None = None,
+                          timeout: float = 5) -> CommandResult:
+        """Hand an item from your inventory to one of your bots (^inventorygive), optionally into a
+        worn slot. Whatever it wore there comes back to your cursor. Not while engaged."""
+        from_slot = item if isinstance(item, int) else item.Slot
+        if from_slot != CURSOR_SLOT:
+            moved = await self.move_item(from_slot, CURSOR_SLOT)
+            if not moved:
+                return moved
+            await asyncio.sleep(0.5)
+        before = next((b.Equipment for b in self.BotGear() if b.Name.lower() == bot_name.lower()), ())
+        result = await self.DoCommand(f"/bot ^inventorygive byname {bot_name}" + (f" {slot}" if slot is not None else ""))
+        if not result:
+            return result
+        deadline = asyncio.get_running_loop().time() + timeout
+        while asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0.3)
+            now = next((b.Equipment for b in self.BotGear() if b.Name.lower() == bot_name.lower()), ())
+            if now != before:
+                return CommandResult(True)
+        return CommandResult(False, f"{bot_name} didn't take it")
 
     async def spawn_bots(self, names: list[str], group: bool = True, pause: float = 1.5) -> list[Spawn]:
         """Spawn your EQEmu bots (^botspawn) and, by default, invite them so they follow you.
