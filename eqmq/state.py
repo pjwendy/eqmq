@@ -49,7 +49,7 @@ class StateMirror:
         self.book = [BookSpell(s.spell_id, s.name, s.level) for s in book.spells]
 
     def _set_inventory(self, inventory: pb.Inventory) -> None:
-        self.inventory = [Item(i.slot, i.item_id, i.name, i.charges, i.container) for i in inventory.items]
+        self.inventory = [Item.from_pb(i) for i in inventory.items]
 
     # ---- frozen views ----
 

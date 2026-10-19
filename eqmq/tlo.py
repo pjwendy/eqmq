@@ -56,6 +56,16 @@ class BookSpell:
     Level: int
 
 
+# EQ inventory slots (RoF2 numbering, as the server uses)
+WORN_SLOTS = {"charm": 0, "ear1": 1, "head": 2, "face": 3, "ear2": 4, "neck": 5, "shoulders": 6, "arms": 7,
+              "back": 8, "wrist1": 9, "wrist2": 10, "range": 11, "hands": 12, "primary": 13, "secondary": 14,
+              "finger1": 15, "finger2": 16, "chest": 17, "legs": 18, "feet": 19, "waist": 20, "powersource": 21,
+              "ammo": 22}
+GENERAL_SLOTS = tuple(range(23, 33))  # the ten top-level bag slots
+CURSOR_SLOT = 33
+BAG_SLOTS_BEGIN = 4010                 # general bag contents: 4010 + (general slot - 23) * 200 + index
+
+
 @dataclass(frozen=True)
 class Item:
     Slot: int
@@ -63,6 +73,43 @@ class Item:
     Name: str
     Charges: int
     Container: bool
+    AC: int = 0
+    HP: int = 0
+    Mana: int = 0
+    Endurance: int = 0
+    STR: int = 0
+    STA: int = 0
+    AGI: int = 0
+    DEX: int = 0
+    WIS: int = 0
+    INT: int = 0
+    CHA: int = 0
+    Damage: int = 0
+    Delay: int = 0
+    Slots: int = 0        # bitmask of worn slots it fits
+    ReqLevel: int = 0
+    Weight: float = 0.0
+    Price: int = 0        # copper: its value, or for a merchant's item what it costs
+    NoDrop: bool = False
+    Lore: bool = False
+    Magic: bool = False
+    BagSlots: int = 0
+    BagSize: int = 0
+    ItemType: int = 0
+    Usable: bool = False  # your race and class can wear it, and you're high enough level
+
+    @property
+    def Worn(self) -> bool:
+        return 0 <= self.Slot <= 22
+
+    def Fits(self, slot: int) -> bool:
+        return bool(self.Slots & (1 << slot))
+
+    @staticmethod
+    def from_pb(i: pb.Item) -> "Item":
+        return Item(i.slot, i.item_id, i.name, i.charges, i.container, i.ac, i.hp, i.mana, i.endurance, i.str,
+                    i.sta, i.agi, i.dex, i.wis, getattr(i, "int"), i.cha, i.damage, i.delay, i.slots, i.req_level,
+                    i.weight, i.price, i.no_drop, i.lore, i.magic, i.bag_slots, i.bag_size, i.item_type, i.usable)
 
 
 @dataclass(frozen=True)
@@ -142,6 +189,8 @@ class Me:
     Silver: int = 0
     Copper: int = 0
     Haters: tuple = ()  # spawn ids of NPCs with you on their hate list
+    Weight: int = 0     # carried weight
+    Capacity: int = 0   # carry more than this (your STR) and you're encumbered
 
     @property
     def PctHPs(self) -> int:
@@ -175,6 +224,10 @@ class Me:
         return next((b for b in self.Buffs if name.lower() in b.Name.lower()), None)
 
     @property
+    def Encumbered(self) -> bool:
+        return self.Capacity > 0 and self.Weight > self.Capacity
+
+    @property
     def Engaged(self) -> bool:
         """In combat: some NPC has you on its hate list."""
         return bool(self.Haters)
@@ -199,6 +252,7 @@ class Me:
             Gems=tuple(Gem(g.slot + 1, g.spell_id, g.name, g.ready) for g in m.gems),
             Buffs=tuple(Buff(b.spell_id, b.name, b.ticks) for b in m.buffs),
             Platinum=m.platinum, Gold=m.gold, Silver=m.silver, Copper=m.copper, Haters=tuple(m.haters),
+            Weight=m.weight, Capacity=m.capacity,
         )
 
 

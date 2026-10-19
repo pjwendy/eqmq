@@ -16,7 +16,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import CON_COLORS, FACTIONS, BookSpell, Group, Item, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.8"
+SDK_VERSION = "eqmq/0.9"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -105,6 +105,16 @@ class LootResult:
 
 
 @dataclass(frozen=True)
+class Merchant:
+    """An open merchant window: what it sells (Item.Slot is the merchant slot, Item.Price the cost)."""
+    NpcID: int
+    Items: tuple = ()
+
+    def Find(self, name: str) -> "Item | None":
+        return next((i for i in self.Items if name.lower() in i.Name.lower()), None)
+
+
+@dataclass(frozen=True)
 class Death:
     Killer: str
     CorpseID: int
@@ -138,6 +148,7 @@ class Bot:
                                                      "death": []}
         self._consider_waiters: dict[int, list[asyncio.Future]] = {}
         self._loot_waiters: dict[int, list[asyncio.Future]] = {}
+        self._merchant_waiters: dict[int, list[asyncio.Future]] = {}
         self._move_waiters: list[asyncio.Future] = []
         self._zone_waiters: list[asyncio.Future] = []
         self._zoning = False
@@ -491,6 +502,52 @@ class Bot:
         except asyncio.TimeoutError:
             return LootResult(corpse_id, False, "no answer from the corpse")
 
+    async def open_merchant(self, npc: Spawn | int, timeout: float = 5) -> Merchant | None:
+        """Open a merchant's window (stand within ~20 units, as the client must). None if it didn't open."""
+        npc_id = npc if isinstance(npc, int) else npc.ID
+        fut = asyncio.get_running_loop().create_future()
+        self._merchant_waiters.setdefault(npc_id, []).append(fut)
+        cmd = pb.Command()
+        cmd.merchant.npc_id = npc_id
+        cmd.merchant.open = True
+        if not await self.command(cmd):
+            self._merchant_waiters[npc_id].remove(fut)
+            return None
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            return None
+
+    async def close_merchant(self, npc: Spawn | int) -> CommandResult:
+        cmd = pb.Command()
+        cmd.merchant.npc_id = npc if isinstance(npc, int) else npc.ID
+        cmd.merchant.open = False
+        return await self.command(cmd)
+
+    async def buy(self, npc: Spawn | int, merchant_slot: int, quantity: int = 1) -> CommandResult:
+        """Buy from an open merchant (its Item.Slot). The server checks coin, lore and room."""
+        cmd = pb.Command()
+        cmd.buy.npc_id = npc if isinstance(npc, int) else npc.ID
+        cmd.buy.merchant_slot = merchant_slot
+        cmd.buy.quantity = quantity
+        return await self.command(cmd)
+
+    async def sell(self, npc: Spawn | int, item: Item | int, quantity: int = 0) -> CommandResult:
+        """Sell an item from your inventory (all of a stack by default) to an open merchant."""
+        cmd = pb.Command()
+        cmd.sell.npc_id = npc if isinstance(npc, int) else npc.ID
+        cmd.sell.slot = item if isinstance(item, int) else item.Slot
+        cmd.sell.quantity = quantity
+        return await self.command(cmd)
+
+    async def move_item(self, from_slot: int, to_slot: int, quantity: int = 0) -> CommandResult:
+        """Move an item, swapping with whatever is there: equip it, or put a bag in a general slot."""
+        cmd = pb.Command()
+        cmd.move_item.from_slot = from_slot
+        cmd.move_item.to_slot = to_slot
+        cmd.move_item.quantity = quantity
+        return await self.command(cmd)
+
     async def spawn_bots(self, names: list[str], group: bool = True, pause: float = 1.5) -> list[Spawn]:
         """Spawn your EQEmu bots (^botspawn) and, by default, invite them so they follow you.
 
@@ -763,6 +820,14 @@ class Bot:
             for fut in self._consider_waiters.pop(c.spawn_id, []):
                 if not fut.done():
                     fut.set_result(con)
+            return
+        if kind == "merchant":
+            mv = event.merchant
+            merchant = Merchant(mv.npc_id, tuple(Item.from_pb(i) for i in mv.items))
+            if mv.open:
+                for fut in self._merchant_waiters.pop(mv.npc_id, []):
+                    if not fut.done():
+                        fut.set_result(merchant)
             return
         if kind == "loot":
             lt = event.loot
