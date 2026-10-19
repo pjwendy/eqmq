@@ -164,6 +164,7 @@ class Spawn:
     OwnerID: int
     Headless: bool
     TargetID: int = 0  # who it has targeted; for an NPC in combat, who it's hitting
+    PctMana: int = 0   # 0 for spawns without mana
     _me_x: float = 0.0
     _me_y: float = 0.0
     _me_z: float = 0.0
@@ -193,7 +194,7 @@ class Spawn:
         return Spawn(
             ID=s.id, Name=s.name, Type=type_name, Level=s.level, ClassID=s.class_id,
             RaceID=s.race_id, X=s.x, Y=s.y, Z=s.z, Heading=s.heading, PctHPs=s.hp_pct,
-            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, _me_x=me_x, _me_y=me_y, _me_z=me_z,
+            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, _me_x=me_x, _me_y=me_y, _me_z=me_z,
         )
 
 
@@ -228,6 +229,10 @@ class Me:
     Weight: int = 0     # carried weight
     Capacity: int = 0   # carry more than this (your STR) and you're encumbered
     RaceBit: int = 0    # your bit in Item.Races
+    ExpPct: float = 0.0     # progress through your level, 0-100 (MQ2 Me.PctExp)
+    AAExpPct: float = 0.0   # progress to your next AA point, 0-100 (MQ2 Me.PctAAExp)
+    AAPoints: int = 0       # unspent AA points
+    AASplit: int = 0        # share of experience going to AA, 0-100
 
     @property
     def PctHPs(self) -> int:
@@ -290,6 +295,7 @@ class Me:
             Buffs=tuple(Buff(b.spell_id, b.name, b.ticks) for b in m.buffs),
             Platinum=m.platinum, Gold=m.gold, Silver=m.silver, Copper=m.copper, Haters=tuple(m.haters),
             Weight=m.weight, Capacity=m.capacity, RaceBit=m.race_bit,
+            ExpPct=m.exp_pct, AAExpPct=m.aa_exp_pct, AAPoints=m.aa_points, AASplit=m.aa_split,
         )
 
 
