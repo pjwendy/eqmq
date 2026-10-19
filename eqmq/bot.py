@@ -721,6 +721,11 @@ class Bot:
 
         return register
 
+    def off(self, kind: str, fn: Callable) -> None:
+        """Unregister a handler added with on()."""
+        if fn in self._handlers.get(kind, []):
+            self._handlers[kind].remove(fn)
+
     def event(self, pattern: str) -> Callable:
         """MQ2 #event: @bot.event("#1# tells you, '#2#'") is called with the captures."""
         compiled = EventPattern(pattern)
