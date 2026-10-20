@@ -80,6 +80,7 @@
   <span id="layers"></span>
   <label><input type="checkbox" id="labels" checked> Labels</label>
   <label><input type="checkbox" id="names"> Names</label>
+  <label title="The server's navmesh: where characters can walk. The biggest piece is green; each other colour is a separate piece (island) a character can't walk to from the rest. Dashed lines are off-mesh links."><input type="checkbox" id="navmesh"> Navmesh<span id="navinfo" class="muted"></span></label>
   <label title="Fade map and spawns far above or below the bot"><input type="checkbox" id="zfilter"> Height ±<input type="number" id="zrange" value="40" min="5" step="5"></label>
   <input type="text" id="filter" placeholder="Find spawn…">
   <!--eqmq:controls-->
@@ -106,6 +107,7 @@ const css = name => getComputedStyle(document.documentElement).getPropertyValue(
 const TYPE_COLOR = { PC: "--pc", NPC: "--npc", Pet: "--pet", Bot: "--bot", Corpse: "--corpse" };
 
 let map = null, state = null, zone = null;
+let nav = null, navKey = null, navGroups = null;
 let view = { cx: 0, cy: 0, scale: 1 };       // map point at screen centre, pixels per unit
 let layerOn = [];
 let hover = null;
@@ -115,9 +117,9 @@ function load() { try { return JSON.parse(localStorage.getItem("eqmq-viewer") ||
 function save() {
   try { localStorage.setItem("eqmq-viewer", JSON.stringify({
     labels: $("labels").checked, names: $("names").checked, zfilter: $("zfilter").checked, zrange: $("zrange").value,
-    follow: $("follow").checked })); } catch {}
+    follow: $("follow").checked, navmesh: $("navmesh").checked })); } catch {}
 }
-for (const k of ["labels", "names", "zfilter", "follow"]) if (k in prefs) $(k).checked = prefs[k];
+for (const k of ["labels", "names", "zfilter", "follow", "navmesh"]) if (k in prefs) $(k).checked = prefs[k];
 if (prefs.zrange) $("zrange").value = prefs.zrange;
 
 function resize() {
@@ -158,6 +160,58 @@ async function loadMap() {
   save();  // fit() unticks follow; keep the user's choice
 }
 
+async function loadNav() {
+  nav = null; navKey = null; $("navinfo").textContent = "";
+  if (!$("navmesh").checked) return;
+  try { nav = await (await fetch("navmesh")).json(); }
+  catch { nav = { polys: [], links: [], islands: 0, error: "couldn't load the navmesh" }; }
+  $("navinfo").textContent = nav.error ? " (none)" : ` (${nav.islands} island${nav.islands === 1 ? "" : "s"})`;
+  $("navinfo").title = nav.error || "";
+  draw();
+}
+
+const islandColour = i => i === 0 ? "#2f9e44" : `hsl(${(i * 137.508) % 360} 80% 55%)`;
+
+// the navmesh as one path per colour (and in/out of the height window), in map coordinates
+function navPaths(zw) {
+  const key = zw ? Math.round(zw[0] / 5) + ":" + Math.round(zw[1] / 5) : "all";
+  if (navKey === key) return navGroups;
+  navGroups = new Map();
+  for (const p of nav.polys) {
+    const inz = !zw || (p[1] >= zw[0] && p[1] <= zw[1]);
+    const g = (p[0] === 0 ? 0 : 1 + p[0] % 24) + (inz ? "+" : "-");
+    if (!navGroups.has(g)) navGroups.set(g, { path: new Path2D(), colour: islandColour(p[0] === 0 ? 0 : 1 + p[0] % 24), inz });
+    const path = navGroups.get(g).path;
+    path.moveTo(p[2], p[3]);
+    for (let k = 4; k < p.length; k += 2) path.lineTo(p[k], p[k + 1]);
+    path.closePath();
+  }
+  navKey = key;
+  return navGroups;
+}
+
+function drawNav(zw, w, h) {
+  if (!$("navmesh").checked || !nav || !nav.polys.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  ctx.save();
+  ctx.setTransform(dpr * view.scale, 0, 0, dpr * view.scale, dpr * (w / 2 - view.cx * view.scale), dpr * (h / 2 - view.cy * view.scale));
+  ctx.lineWidth = 1 / view.scale;
+  for (const g of navPaths(zw).values()) {
+    ctx.fillStyle = ctx.strokeStyle = g.colour;
+    ctx.globalAlpha = g.inz ? 0.25 : 0.04; ctx.fill(g.path);
+    ctx.globalAlpha = g.inz ? 0.55 : 0.08; ctx.stroke(g.path);
+  }
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = "#d6336c"; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+  for (const l of nav.links) {
+    ctx.globalAlpha = !zw || (l[2] >= zw[0] && l[2] <= zw[1]) || (l[5] >= zw[0] && l[5] <= zw[1]) ? 1 : 0.2;
+    const [ax, ay] = toScreen(l[0], l[1]), [bx, by] = toScreen(l[3], l[4]);
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function zWindow() {
   if (!$("zfilter").checked || !state || !state.me) return null;
   const r = +$("zrange").value || 40;
@@ -171,6 +225,7 @@ function draw() {
   const zw = zWindow();
   const inZ = z => !zw || (z >= zw[0] && z <= zw[1]);
   const [vx0, vy0] = toMap(0, 0), [vx1, vy1] = toMap(w, h);
+  drawNav(zw, w, h);
 
   // map lines, batched by colour and by in/out of the height window
   ctx.lineWidth = 1;
@@ -285,7 +340,7 @@ function connect() {
   const es = new EventSource("events");
   es.onmessage = async ev => {
     state = JSON.parse(ev.data);
-    if (state.connected && state.zone !== zone) { zone = state.zone; await loadMap(); }
+    if (state.connected && state.zone !== zone) { zone = state.zone; await loadMap(); loadNav(); }
     if (state.connected && $("follow").checked) { view.cx = -state.me.x; view.cy = -state.me.y; }
     updateStatus(); draw(); showTip(); renderGroup(state.group); appendLog(state.log);
     document.dispatchEvent(new CustomEvent("eqmq-state", { detail: state }));  // for plugins' controls
@@ -335,6 +390,7 @@ function showTip() {
 $("fit").onclick = fit;
 for (const id of ["labels", "names", "zfilter", "zrange", "follow"]) $(id).addEventListener("change", () => { save(); draw(); });
 $("filter").addEventListener("input", draw);
+$("navmesh").addEventListener("change", () => { save(); if ($("navmesh").checked && !nav) loadNav(); else draw(); });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 addEventListener("resize", resize);
 resize();

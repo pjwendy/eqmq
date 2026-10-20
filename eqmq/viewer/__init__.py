@@ -5,6 +5,7 @@ files in the client's maps folder; never shipped with the SDK) and puts the bot,
 NPCs, pets, EQEmu bots and corpses on top, updated live from the SDK's state.
 
     EQMQ_MAPS=C:/EQ/RoF2Client/maps  (folder with poknowledge.txt etc.)
+    EQMQ_NAV=C:/server/maps/nav      (optional: the server's navmeshes, drawn by the Navmesh box)
     EQMQ_VIEWER_PORT=8765            (default)
 
     bot = await eqmq.connect(...)
@@ -28,6 +29,7 @@ import time
 from importlib import resources
 
 from ..plugin import MQPlugin
+from .navmesh import NavStore
 
 log = logging.getLogger("eqmq.viewer")
 
@@ -116,11 +118,13 @@ class MapViewer(MQPlugin):
     extra_controls = ""  # HTML added to the toolbar
     extra_script = ""    # HTML (a <script> block) added at the end of the page
 
-    def __init__(self, bot, host: str = "127.0.0.1", port: int | None = None, maps: str | None = None):
+    def __init__(self, bot, host: str = "127.0.0.1", port: int | None = None, maps: str | None = None,
+                 nav: str | None = None):
         super().__init__(bot)
         self.host = host
         self.port = port or int(os.environ.get("EQMQ_VIEWER_PORT", "8765"))
         self.maps = MapStore(maps or os.environ.get("EQMQ_MAPS"))
+        self.nav = NavStore(nav or os.environ.get("EQMQ_NAV"))
         self._server: asyncio.base_events.Server | None = None
         page = resources.files(__package__).joinpath("index.html").read_text(encoding="utf-8")
         page = page.replace("<!--eqmq:controls-->", self.extra_controls).replace("<!--eqmq:script-->", self.extra_script)
@@ -203,6 +207,10 @@ class MapViewer(MQPlugin):
             zone = self.bot.Zone
             data = self.maps.get(zone.ShortName) if zone else {"layers": [], "error": "not in a zone"}
             return 200, "application/json", json.dumps(data).encode()
+        if path == "/navmesh":
+            zone = self.bot.Zone
+            data = self.nav.get(zone.ShortName) if zone else {"polys": [], "links": [], "error": "not in a zone"}
+            return 200, "application/json", json.dumps(data, separators=(",", ":")).encode()
         return None
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
