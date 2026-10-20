@@ -7,11 +7,12 @@ NPCs, pets, EQEmu bots and corpses on top, updated live from the SDK's state.
     EQMQ_MAPS=C:/EQ/RoF2Client/maps  (folder with poknowledge.txt etc.)
     EQMQ_NAV=C:/server/maps/nav      (optional: the server's navmeshes, drawn by the Navmesh box)
     EQMQ_VIEWER_PORT=8765            (default)
+    EQMQ_VIEWER_HOST=127.0.0.1       (default; another address, e.g. 0.0.0.0, to view it from elsewhere)
 
     bot = await eqmq.connect(...)
     await bot.run([MapViewer(bot)])   # then open http://127.0.0.1:8765
 
-Display only: the page cannot send commands. It listens on 127.0.0.1 only.
+Display only: the page cannot send commands. It listens on 127.0.0.1 unless EQMQ_VIEWER_HOST says otherwise.
 No dependencies beyond the standard library: plain HTTP plus Server-Sent Events.
 
 Subclasses can add routes (override route()) and page controls (extra_controls: HTML for the
@@ -118,10 +119,10 @@ class MapViewer(MQPlugin):
     extra_controls = ""  # HTML added to the toolbar
     extra_script = ""    # HTML (a <script> block) added at the end of the page
 
-    def __init__(self, bot, host: str = "127.0.0.1", port: int | None = None, maps: str | None = None,
+    def __init__(self, bot, host: str | None = None, port: int | None = None, maps: str | None = None,
                  nav: str | None = None):
         super().__init__(bot)
-        self.host = host
+        self.host = host or os.environ.get("EQMQ_VIEWER_HOST", "127.0.0.1")
         self.port = port or int(os.environ.get("EQMQ_VIEWER_PORT", "8765"))
         self.maps = MapStore(maps or os.environ.get("EQMQ_MAPS"))
         self.nav = NavStore(nav or os.environ.get("EQMQ_NAV"))
