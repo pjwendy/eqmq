@@ -90,16 +90,20 @@
   #tip { position: absolute; pointer-events: none; display: none; white-space: nowrap; }
   #error { top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; max-width: 80%; }
   .muted { color: var(--muted); }
-  #sidebtn { display: none; }
+  #sidebtn, #tabs { display: none; }
+  #tabs button { flex: 1; }
+  #tabs button.on { font-weight: 600; }
   @media (max-width: 700px) {
-    /* phones: the side panel is a sheet over the bottom of the map, opened with Info */
+    /* phones: the side panel is a sheet over the bottom of the map, opened with Info, one tab at a
+       time (group, plan or log) so each gets the whole sheet */
     #sidebtn { display: inline-block; }
-    #side { display: none; top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 55vh;
-      overflow-y: auto; }
+    #side { display: none; top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; height: 60vh; }
     body.sheet #side { display: flex; }
     body.sheet #status { display: none; }
-    #side #legend { display: none; }
-    #side #log { min-height: 140px; }
+    #side #tabs { display: flex; gap: 6px; flex: none; padding: 6px; }
+    #side > .panel:not(#tabs) { display: none; }
+    body[data-tab="group"] #side > #group, body[data-tab="plan"] #side > #plan { display: block !important; flex: 1; overflow-y: auto; }
+    body[data-tab="log"] #side > #log { display: flex !important; flex: 1; min-height: 0; }
     #controls { top: 8px; left: 8px; max-width: calc(100% - 16px); }
   }
 </style>
@@ -120,6 +124,7 @@
   <!--eqmq:controls-->
 </div>
 <div id="side">
+  <div id="tabs" class="panel"><button data-tab="group">Group</button><button data-tab="plan">Plan</button><button data-tab="log">Log</button></div>
   <div id="legend" class="panel">
     <span style="--c: var(--me)">You</span><span class="sq" style="--c: var(--pc)">Player</span><span class="sq" style="--c: var(--bot)">Bot</span>
     <span style="--c: var(--npc)">NPC</span><span style="--c: var(--pet)">Pet</span><span style="--c: var(--corpse)">Corpse</span>
@@ -515,6 +520,15 @@ $("sidebtn").onclick = () => {
   try { localStorage.setItem("eqmq-viewer-sheet", open ? "1" : ""); } catch {}
 };
 try { if (localStorage.getItem("eqmq-viewer-sheet")) $("sidebtn").click(); } catch {}
+function showTab(tab) {
+  document.body.dataset.tab = tab;
+  for (const b of document.querySelectorAll("#tabs button")) b.classList.toggle("on", b.dataset.tab === tab);
+  try { localStorage.setItem("eqmq-viewer-tab", tab); } catch {}
+}
+for (const b of document.querySelectorAll("#tabs button")) b.onclick = () => showTab(b.dataset.tab);
+let savedTab = "log";
+try { savedTab = localStorage.getItem("eqmq-viewer-tab") || "log"; } catch {}
+showTab(savedTab);
 for (const id of ["labels", "names", "zfilter", "zrange", "follow", "concol"]) $(id).addEventListener("change", () => { save(); draw(); });
 $("filter").addEventListener("input", draw);
 $("navmesh").addEventListener("change", () => { save(); if ($("navmesh").checked && !nav) loadNav(); else draw(); });
