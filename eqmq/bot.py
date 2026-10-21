@@ -55,12 +55,14 @@ class Refused(Exception):
 
 @dataclass(frozen=True)
 class MoveResult:
-    """How a /moveto ended: "ARRIVED", "STOPPED", "STUCK", "NO_PATH", "ZONE_LINE" or "LOCKED" (a door
-    on the way that it has no key for)."""
+    """How a /moveto ended: "ARRIVED", "STOPPED", "STUCK", "NO_PATH", "ZONE_LINE", "LOCKED" (a door
+    on the way that it has no key for) or "REFUSED" (the server didn't take the command: Error says
+    why, e.g. the rate limit, casting, or not being in a zone yet)."""
     Status: str
     X: float
     Y: float
     Z: float
+    Error: str = ""
 
     @property
     def Loc(self) -> str:
@@ -382,7 +384,8 @@ class Bot:
                      timeout: float = 300) -> CommandResult | MoveResult:
         """Walk to a point (in-game x, y, z; /loc prints y first) along the navmesh at run speed.
 
-        With wait=True, returns the MoveResult when the walk ends instead of the CommandResult.
+        With wait=True, returns the MoveResult when the walk ends instead of the CommandResult (a
+        refused command is a MoveResult too, with Status "REFUSED"), so callers can always read Status.
         z defaults to your current height; the server keeps you on the floor either way.
         """
         me = self._state.me
@@ -396,7 +399,7 @@ class Bot:
         result = await self.command(cmd)
         if not result:
             self._move_waiters.remove(fut)
-            return result
+            return MoveResult("REFUSED", *(self._pos()), Error=result.error)
         try:
             return await asyncio.wait_for(fut, timeout)
         except asyncio.TimeoutError:
