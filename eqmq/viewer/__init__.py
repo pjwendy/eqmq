@@ -140,13 +140,25 @@ class MapViewer(MQPlugin):
         self.plan = None
 
     def note(self, text: str, kind: str = "info") -> None:
-        """Add a line to the page's log (kinds: info, decision, chat, trade, kill, loot, level, death, good)."""
+        """Add a line to the page's log (kinds: info, decision, zone, chat, trade, kill, loot, level, death, good)."""
         self._log_id += 1
         self._log.append({"id": self._log_id, "t": time.strftime("%H:%M"), "kind": kind, "text": str(text)[:300]})
 
     def _on_chat(self, chat) -> None:
         self._chat_line = chat.Line  # the "line" handler gets it next: don't log it twice
         self.note(chat.Line, "chat")
+
+    def _on_zone(self, change) -> None:
+        """Zone lines, ports, gates, deaths and #zone all come through here."""
+        if change.Status == "LEAVING":
+            self._zoning_since = time.monotonic()
+            self.note(f"zoning to {change.Zone or 'another zone'}...", "zone")
+        elif change.Status == "ARRIVED":
+            took = time.monotonic() - getattr(self, "_zoning_since", time.monotonic())
+            zone = self.bot.Zone
+            self.note(f"arrived in {zone.Name if zone else change.Zone} ({took:.0f}s)", "zone")
+        elif change.Status == "REFUSED":
+            self.note(f"couldn't zone to {change.Zone}: {change.Detail or 'refused'}", "zone")
 
     def _on_line(self, line: str) -> None:
         if line == self._chat_line:
@@ -164,6 +176,7 @@ class MapViewer(MQPlugin):
     async def on_load(self) -> None:
         self.bot.on("chat")(self._on_chat)
         self.bot.on("line")(self._on_line)
+        self.bot.on("zone")(self._on_zone)
         self._server = await asyncio.start_server(self._handle, self.host, self.port)
         log.info("map viewer at http://%s:%d", self.host, self.port)
         print(f"eqmq-viewer: http://{self.host}:{self.port}", flush=True)
@@ -171,6 +184,7 @@ class MapViewer(MQPlugin):
     async def on_clean(self) -> None:
         self.bot.off("chat", self._on_chat)
         self.bot.off("line", self._on_line)
+        self.bot.off("zone", self._on_zone)
         if self._server:
             self._server.close()
             await self._server.wait_closed()
