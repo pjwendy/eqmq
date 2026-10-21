@@ -90,13 +90,25 @@
   #tip { position: absolute; pointer-events: none; display: none; white-space: nowrap; }
   #error { top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; max-width: 80%; }
   .muted { color: var(--muted); }
-  @media (max-width: 700px) { #side { display: none; } }
+  #sidebtn { display: none; }
+  @media (max-width: 700px) {
+    /* phones: the side panel is a sheet over the bottom of the map, opened with Info */
+    #sidebtn { display: inline-block; }
+    #side { display: none; top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 55vh;
+      overflow-y: auto; }
+    body.sheet #side { display: flex; }
+    body.sheet #status { display: none; }
+    #side #legend { display: none; }
+    #side #log { min-height: 140px; }
+    #controls { top: 8px; left: 8px; max-width: calc(100% - 16px); }
+  }
 </style>
 </head>
 <body>
 <canvas id="map"></canvas>
 <div id="controls" class="panel">
   <button id="fit" title="Fit the whole zone">Fit</button>
+  <button id="sidebtn" title="Group, plan and log">Info</button>
   <label><input type="checkbox" id="follow" checked> Follow bot</label>
   <span id="layers"></span>
   <label><input type="checkbox" id="labels" checked> Labels</label>
@@ -497,6 +509,12 @@ function showTip() {
 }
 
 $("fit").onclick = fit;
+$("sidebtn").onclick = () => {
+  const open = document.body.classList.toggle("sheet");
+  $("sidebtn").textContent = open ? "Hide info" : "Info";
+  try { localStorage.setItem("eqmq-viewer-sheet", open ? "1" : ""); } catch {}
+};
+try { if (localStorage.getItem("eqmq-viewer-sheet")) $("sidebtn").click(); } catch {}
 for (const id of ["labels", "names", "zfilter", "zrange", "follow", "concol"]) $(id).addEventListener("change", () => { save(); draw(); });
 $("filter").addEventListener("input", draw);
 $("navmesh").addEventListener("change", () => { save(); if ($("navmesh").checked && !nav) loadNav(); else draw(); });
