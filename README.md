@@ -57,7 +57,7 @@ The TLOs are properties of the `Bot`. Each one returns a fresh, read-only object
 
 | TLO | | MQ2 |
 |---|---|---|
-| `bot.Me` | You: `Name`, `Level`, `ClassID`, `RaceID`, `CurrentHPs`/`MaxHPs`/`PctHPs`, mana and endurance the same way, `X`/`Y`/`Z`/`Heading`/`Loc`, `TargetID`, `Sitting`/`Standing`, `Combat` (auto-attack), `Casting`/`CastingID`, `Gems` and `Gem(n or name)`, `Buffs` and `Buff(name)`, coin (`Platinum`... and `Money` in copper), `Weight`/`Capacity`/`Encumbered`, `Haters`/`Engaged`, `ExpPct`, `AAExpPct`, `AAPoints`, `AASplit`, `RunSpeed` | `${Me}` |
+| `bot.Me` | You: `Name`, `Level`, `ClassID`, `RaceID`, `CurrentHPs`/`MaxHPs`/`PctHPs`, mana and endurance the same way, `X`/`Y`/`Z`/`Heading`/`Loc`, `TargetID`, `Sitting`/`Standing`, `Combat` (auto-attack), `Casting`/`CastingID`, `Gems` and `Gem(n or name)`, `Buffs` and `Buff(name)`, coin (`Platinum`... and `Money` in copper), `Weight`/`Capacity`/`Encumbered`, `Haters`/`Engaged`, `ExpPct`, `AAExpPct`, `AAPoints`, `AASplit`, `RunSpeed`, `Disciplines` | `${Me}` |
 | `bot.Target` | Your target, as a `Spawn` (or `None`) | `${Target}` |
 | `bot.Spawn(search)`, `bot.Spawns(search)`, `bot.SpawnCount(search)`, `bot.NearestSpawn(n, search)` | Spawns in the zone matching an MQ2-style search | `${Spawn[]}`, `${SpawnCount[]}`, `${NearestSpawn[]}` |
 | `bot.Group` | `All` (members, you first), `Members`, `Leader`, `Member(n or name)` | `${Group}` |
@@ -96,6 +96,10 @@ mob died shows up in state and events, as it would on a player's screen.
 | `loot(corpse)` | Loot a corpse. A `LootResult`: the `Items` taken, and coin. |
 | `open_merchant(npc)`, `buy(npc, slot, qty)`, `sell(npc, item, qty)`, `close_merchant(npc)` | Shopping. `open_merchant` returns the merchant's list. |
 | `move_item(from_slot, to_slot)` | Move items between inventory, bags, worn slots and the bank. |
+| `ability(name)` | A combat ability: kick, bash, backstab, taunt, frenzy, the monk strikes; sneak, hide, feign death (`ABILITIES`). |
+| `discipline(spell_id)` | A discipline you know (`Me.Disciplines`). |
+| `pet(command)`, `Pet()` | Command your pet (`"attack"`, `"back off"`, `"follow"`, `"taunt on"`, ... `PET_COMMANDS`); your pet. |
+| `use_item(item)` | Right-click an item: a click effect, a potion, a tome. |
 | `invite(who)`, `disband()` | Groups. |
 | `spawn_bots(names)`, `give_to_bot(name, item, slot)` | Spawn and group your EQEmu bots; hand one an item. |
 | `wait_zoned(timeout)` | Wait for the next zone change (after dying, or a teleport). |
@@ -108,7 +112,7 @@ mob died shows up in state and events, as it would on a player's screen.
 `/say` (`/s`), `/g` (`/gsay`), `/gu` (`/guildsay`), `/rsay`, `/ooc`, `/shout`, `/auction` (`/auc`),
 `/tell` (`/t`, `/msg`), `/target` (`id <n>`, a name, a search, or `clear`), `/attack on|off`, `/sit`,
 `/stand`, `/moveto loc <y> <x> [z]`, `/moveto id <n>` or `/moveto off`, `/face`, `/invite`, `/disband`, `/cast <gem|name>`, `/stopcast`, `/memspell <gem> <name>`,
-`/consider` (`/con`), `/loot`, `/zoneto <zone>` (`/travelto`), and `/bot ^...` for EQEmu bot
+`/consider` (`/con`), `/loot`, `/doability <name>`, `/disc <spell id>`, `/pet <command>`, `/zoneto <zone>` (`/travelto`), and `/bot ^...` for EQEmu bot
 commands. Plugins can add their own (see below).
 
 ## Events

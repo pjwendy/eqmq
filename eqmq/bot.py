@@ -26,6 +26,12 @@ ABILITIES = {"backstab": 8, "bash": 10, "slam": 10, "dragon punch": 21, "tail ra
              "feign death": 25, "flying kick": 26, "hide": 29, "kick": 30, "round kick": 38, "sneak": 42,
              "tiger claw": 52, "intimidation": 71, "taunt": 73, "frenzy": 74}
 
+# pet commands (EQEmu's PetCommand numbers), for pet() and /pet
+PET_COMMANDS = {"health": 0, "leader": 1, "attack": 2, "qattack": 3, "follow": 4, "guard": 5, "sit": 6,
+                "sit on": 7, "sit off": 8, "taunt": 12, "taunt on": 13, "taunt off": 14, "hold": 15,
+                "hold on": 16, "hold off": 17, "ghold": 18, "spellhold": 21, "focus": 24, "feign": 27,
+                "back off": 28, "get lost": 29, "guard me": 30, "regroup": 31}
+
 _CHANNEL_COMMANDS = {
     "/say": pb.CHAT_SAY, "/s": pb.CHAT_SAY,
     "/g": pb.CHAT_GROUP, "/gsay": pb.CHAT_GROUP,
@@ -507,6 +513,35 @@ class Bot:
         cmd.ability.skill_id = skill
         return await self.command(cmd)
 
+    async def pet(self, command: str | int) -> CommandResult:
+        """Command your pet, as /pet: "attack" (your target), "back off", "follow", "guard", "taunt on",
+        "hold", "sit", ... (PET_COMMANDS), or EQEmu's pet command number."""
+        number = command if isinstance(command, int) else PET_COMMANDS.get(command.lower().strip())
+        if number is None:
+            return CommandResult(False, f"unknown pet command {command!r}; one of {', '.join(PET_COMMANDS)}")
+        cmd = pb.Command()
+        cmd.pet.command = number
+        return await self.command(cmd)
+
+    def Pet(self) -> Spawn | None:
+        """Your pet, if you have one here."""
+        me = self.Me
+        return next((s for s in self.Spawns("pet") if me and s.OwnerID == me.ID), None)
+
+    async def discipline(self, spell_id: int) -> CommandResult:
+        """Use a discipline you know (Me.Disciplines), as the combat abilities window: on your target,
+        or yourself. The server applies its reuse timer."""
+        cmd = pb.Command()
+        cmd.discipline.spell_id = spell_id
+        return await self.command(cmd)
+
+    async def use_item(self, item: Item | int) -> CommandResult:
+        """Right-click an item (or a slot): its click effect, a potion or food, or a tome, which teaches
+        you its discipline."""
+        cmd = pb.Command()
+        cmd.use_item.slot = item if isinstance(item, int) else item.Slot
+        return await self.command(cmd)
+
     async def stopcast(self) -> CommandResult:
         cmd = pb.Command()
         cmd.stop_cast.SetInParent()
@@ -826,6 +861,10 @@ class Bot:
             if not what:
                 return CommandResult(False, "usage: /cast <gem> | /cast \"Spell Name\"")
             return await self.cast(int(what) if what.isdigit() else what)
+        if word == "/pet":
+            return await self.pet(rest)
+        if word in ("/disc", "/discipline") and rest.strip().isdigit():
+            return await self.discipline(int(rest))
         if word == "/doability":
             return await self.ability(int(rest) if rest.strip().isdigit() else rest)
         if word == "/stopcast":

@@ -235,6 +235,7 @@ class Me:
     AAPoints: int = 0       # unspent AA points
     AASplit: int = 0        # share of experience going to AA, 0-100
     RunSpeed: float = 0.0   # how fast a walk goes now, units per second (0: rooted, or an older server)
+    Disciplines: tuple = () # spell ids of the disciplines you know (bot.discipline())
 
     @property
     def PctHPs(self) -> int:
@@ -298,6 +299,7 @@ class Me:
             Platinum=m.platinum, Gold=m.gold, Silver=m.silver, Copper=m.copper, Haters=tuple(m.haters),
             Weight=m.weight, Capacity=m.capacity, RaceBit=m.race_bit,
             ExpPct=m.exp_pct, AAExpPct=m.aa_exp_pct, AAPoints=m.aa_points, AASplit=m.aa_split, RunSpeed=m.run_speed,
+            Disciplines=tuple(m.disciplines),
         )
 
 
