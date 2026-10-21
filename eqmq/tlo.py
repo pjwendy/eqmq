@@ -234,6 +234,7 @@ class Me:
     AAExpPct: float = 0.0   # progress to your next AA point, 0-100 (MQ2 Me.PctAAExp)
     AAPoints: int = 0       # unspent AA points
     AASplit: int = 0        # share of experience going to AA, 0-100
+    RunSpeed: float = 0.0   # how fast a walk goes now, units per second (0: rooted, or an older server)
 
     @property
     def PctHPs(self) -> int:
@@ -296,7 +297,7 @@ class Me:
             Buffs=tuple(Buff(b.spell_id, b.name, b.ticks) for b in m.buffs),
             Platinum=m.platinum, Gold=m.gold, Silver=m.silver, Copper=m.copper, Haters=tuple(m.haters),
             Weight=m.weight, Capacity=m.capacity, RaceBit=m.race_bit,
-            ExpPct=m.exp_pct, AAExpPct=m.aa_exp_pct, AAPoints=m.aa_points, AASplit=m.aa_split,
+            ExpPct=m.exp_pct, AAExpPct=m.aa_exp_pct, AAPoints=m.aa_points, AASplit=m.aa_split, RunSpeed=m.run_speed,
         )
 
 

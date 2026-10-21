@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import math
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
@@ -702,11 +703,17 @@ class Bot:
 
         return wait()
 
-    async def zone_to(self, short_name: str, timeout: float = 300) -> ZoneChange:
+    async def zone_to(self, short_name: str, timeout: float | None = None) -> ZoneChange:
         """Walk to this zone's zone line for a neighbouring zone (see Zone.Exits) and through it.
 
-        Returns once you're in the new zone (ARRIVED), or why not (REFUSED, TIMEOUT).
+        Returns once you're in the new zone (ARRIVED), or why not (REFUSED, TIMEOUT). The timeout
+        defaults to the walk to the nearest such zone line at your run speed (at least 5 minutes).
         """
+        if timeout is None:
+            me, zone = self._state.me, self.Zone
+            far = [math.dist((me.x, me.y), (e.X if abs(e.X) < 999990 else me.x, e.Y if abs(e.Y) < 999990 else me.y))
+                   for e in (zone.Exits if zone else ()) if e.Zone == short_name] if me else []
+            timeout = max(300.0, self.walk_time(min(far), 60)) if far else 300.0
         done = self.wait_zoned(timeout)  # listening before we start walking
         cmd = pb.Command()
         cmd.zone_to.zone = short_name
@@ -728,6 +735,14 @@ class Bot:
             return await asyncio.wait_for(fut, timeout)
         except asyncio.TimeoutError:
             return ZoneChange("TIMEOUT", short_name, 0, f"no zone change within {timeout:.0f}s")
+
+    def walk_time(self, distance: float, margin: float = 30.0) -> float:
+        """A timeout for walking `distance` units at your run speed: routes wind (half as far again
+        as the straight line), plus `margin` seconds for doors, lifts and the start. With no speed
+        known (rooted, or an older server) it assumes 10 units a second."""
+        me = self._state.me
+        speed = me.run_speed if me and me.run_speed > 0 else 10.0
+        return margin + distance * 1.5 / max(speed, 3.0)
 
     def _pos(self) -> tuple[float, float, float]:
         me = self._state.me
