@@ -2,6 +2,7 @@
 name = "eqmq"
 version = "0.1.0"
 description = "MQ2-shaped Python SDK for EQEmu headless characters"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["protobuf>=5.29"]
 license = { text = "GPL-3.0-or-later" }
