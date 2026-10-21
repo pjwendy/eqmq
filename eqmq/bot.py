@@ -17,7 +17,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.13"
+SDK_VERSION = "eqmq/0.14"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -121,12 +121,28 @@ class LootResult:
 
 @dataclass(frozen=True)
 class Merchant:
-    """An open merchant window: what it sells (Item.Slot is the merchant slot, Item.Price the cost)."""
+    """An open merchant window: what it sells (Item.Slot is the merchant slot, Item.Price the cost).
+    A parcel merchant also lists the parcels waiting for you."""
     NpcID: int
     Items: tuple = ()
+    ParcelMerchant: bool = False
+    Parcels: tuple = ()  # Parcel
 
     def Find(self, name: str) -> "Item | None":
         return next((i for i in self.Items if name.lower() in i.Name.lower()), None)
+
+
+@dataclass(frozen=True)
+class Parcel:
+    """A parcel waiting for you at the parcel merchants (any of them). ItemID 99990 is coin
+    (Quantity: copper)."""
+    Slot: int
+    ItemID: int
+    Name: str
+    Quantity: int
+    From: str
+    Note: str = ""
+    Sent: int = 0  # unix time
 
 
 @dataclass(frozen=True)
@@ -641,6 +657,27 @@ class Bot:
         cmd.sell.quantity = quantity
         return await self.command(cmd)
 
+    async def send_parcel(self, npc: Spawn | int, item: Item | int, to: str, note: str = "",
+                          quantity: int = 0) -> CommandResult:
+        """Send an item from your inventory (all of a stack by default) as a parcel to a character,
+        at a parcel merchant whose window is open. Not no-drop items. The server allows one parcel
+        every 30 seconds (Parcel:ParcelDeliveryDelay); a refusal comes as the merchant's tell."""
+        cmd = pb.Command()
+        cmd.parcel_send.npc_id = npc if isinstance(npc, int) else npc.ID
+        cmd.parcel_send.slot = item if isinstance(item, int) else item.Slot
+        cmd.parcel_send.to = to
+        cmd.parcel_send.note = note[:127]
+        cmd.parcel_send.quantity = quantity
+        return await self.command(cmd)
+
+    async def retrieve_parcel(self, npc: Spawn | int, parcel: "Parcel") -> CommandResult:
+        """Take a parcel (Merchant.Parcels) from an open parcel merchant's window into your bags."""
+        cmd = pb.Command()
+        cmd.parcel_retrieve.npc_id = npc if isinstance(npc, int) else npc.ID
+        cmd.parcel_retrieve.parcel_slot = parcel.Slot
+        cmd.parcel_retrieve.item_id = parcel.ItemID
+        return await self.command(cmd)
+
     async def move_item(self, from_slot: int, to_slot: int, quantity: int = 0) -> CommandResult:
         """Move an item, swapping with whatever is there: equip it, or put a bag in a general slot."""
         cmd = pb.Command()
@@ -997,7 +1034,9 @@ class Bot:
             return
         if kind == "merchant":
             mv = event.merchant
-            merchant = Merchant(mv.npc_id, tuple(Item.from_pb(i) for i in mv.items))
+            merchant = Merchant(mv.npc_id, tuple(Item.from_pb(i) for i in mv.items), mv.parcel_merchant,
+                                tuple(Parcel(p.slot, p.item_id, p.name, p.quantity, getattr(p, "from"), p.note, p.sent)
+                                      for p in mv.parcels))
             if mv.open:
                 for fut in self._merchant_waiters.pop(mv.npc_id, []):
                     if not fut.done():
