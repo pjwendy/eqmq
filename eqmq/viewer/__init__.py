@@ -151,10 +151,13 @@ class MapViewer(MQPlugin):
     def _on_zone(self, change) -> None:
         """Zone lines, ports, gates, deaths and #zone all come through here."""
         if change.Status == "LEAVING":
-            self._zoning_since = time.monotonic()
+            if time.monotonic() - getattr(self, "_zoning_since", -1e9) < 30 and getattr(self, "_zoning_to", None) == change.Zone:
+                return  # the server says it twice (the zone change request, then its answer)
+            self._zoning_since, self._zoning_to = time.monotonic(), change.Zone
             self.note(f"zoning to {change.Zone or 'another zone'}...", "zone")
         elif change.Status == "ARRIVED":
             took = time.monotonic() - getattr(self, "_zoning_since", time.monotonic())
+            self._zoning_to = None
             zone = self.bot.Zone
             self.note(f"arrived in {zone.Name if zone else change.Zone} ({took:.0f}s)", "zone")
         elif change.Status == "REFUSED":
