@@ -21,6 +21,11 @@ SDK_VERSION = "eqmq/0.13"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
+# combat abilities (EQ skill numbers), for ability() and /doability
+ABILITIES = {"backstab": 8, "bash": 10, "slam": 10, "dragon punch": 21, "tail rake": 21, "eagle strike": 23,
+             "feign death": 25, "flying kick": 26, "hide": 29, "kick": 30, "round kick": 38, "sneak": 42,
+             "tiger claw": 52, "intimidation": 71, "taunt": 73, "frenzy": 74}
+
 _CHANNEL_COMMANDS = {
     "/say": pb.CHAT_SAY, "/s": pb.CHAT_SAY,
     "/g": pb.CHAT_GROUP, "/gsay": pb.CHAT_GROUP,
@@ -490,6 +495,18 @@ class Bot:
             if watch in self._handlers["line"]:
                 self._handlers["line"].remove(watch)
 
+    async def ability(self, which: str | int) -> CommandResult:
+        """Use a combat ability as the client's ability buttons do, by name or EQ skill number: kick,
+        bash (slam), backstab, taunt, frenzy, intimidation and the monk strikes act on your target;
+        sneak, hide and feign death on you. The server checks the skill and its reuse timer (it says
+        "Ability recovery time not yet met." if you're early). As /doability."""
+        skill = which if isinstance(which, int) else ABILITIES.get(which.lower().strip())
+        if skill is None:
+            return CommandResult(False, f"unknown ability {which!r}; one of {', '.join(sorted(ABILITIES))}")
+        cmd = pb.Command()
+        cmd.ability.skill_id = skill
+        return await self.command(cmd)
+
     async def stopcast(self) -> CommandResult:
         cmd = pb.Command()
         cmd.stop_cast.SetInParent()
@@ -809,6 +826,8 @@ class Bot:
             if not what:
                 return CommandResult(False, "usage: /cast <gem> | /cast \"Spell Name\"")
             return await self.cast(int(what) if what.isdigit() else what)
+        if word == "/doability":
+            return await self.ability(int(rest) if rest.strip().isdigit() else rest)
         if word == "/stopcast":
             return await self.stopcast()
         if word == "/memspell":
