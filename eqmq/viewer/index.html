@@ -9,18 +9,28 @@
     --bg: #f4f2ec; --panel: #ffffffee; --text: #222; --muted: #777; --border: #d6d2c8;
     --pc: #1f6feb; --npc: #c0392b; --pet: #8e44ad; --bot: #16a085; --corpse: #888; --me: #e67e22; --target: #f1c40f;
     --hp: #d63a2f; --mana: #2f6fd6; --xp: #c99a0a; --aa: #8e44ad; --track: #e3dfd6; --kill: #c0392b; --loot: #b7791f; --plan: #6b46c1; --good: #2f855a;
+    --chat: #1d7a8c; --trade: #9c5a1a;
+    /* con colours, as the client shows them */
+    --con-gray: #9a9a9a; --con-green: #2fa84f; --con-lblue: #3fb6e8; --con-blue: #1f4fd6; --con-white: #ffffff; --con-yellow: #e6c200; --con-red: #d63a2f;
+    --outline: #333;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #15171a; --panel: #22252aee; --text: #e6e6e6; --muted: #999; --border: #3a3e45;
       --pc: #58a6ff; --npc: #ff6b5b; --pet: #c38fff; --bot: #3ddbb5; --corpse: #777; --me: #ffa94d; --target: #ffd43b;
       --hp: #ff6b5b; --mana: #6ea8ff; --xp: #f2c94c; --aa: #c38fff; --track: #33373e; --kill: #ff7b6e; --loot: #f6c25b; --plan: #b794f4; --good: #68d391;
+      --chat: #5fd0e3; --trade: #e8a65d;
+      --con-gray: #8a8a8a; --con-green: #4cd06a; --con-lblue: #6fd3ff; --con-blue: #4f7dff; --con-white: #f4f4f4; --con-yellow: #ffd93b; --con-red: #ff5b4b;
+      --outline: #000;
     }
   }
   :root[data-theme="dark"] {
     --bg: #15171a; --panel: #22252aee; --text: #e6e6e6; --muted: #999; --border: #3a3e45;
     --pc: #58a6ff; --npc: #ff6b5b; --pet: #c38fff; --bot: #3ddbb5; --corpse: #777; --me: #ffa94d; --target: #ffd43b;
     --hp: #ff6b5b; --mana: #6ea8ff; --xp: #f2c94c; --aa: #c38fff; --track: #33373e; --kill: #ff7b6e; --loot: #f6c25b; --plan: #b794f4; --good: #68d391;
+    --chat: #5fd0e3; --trade: #e8a65d;
+    --con-gray: #8a8a8a; --con-green: #4cd06a; --con-lblue: #6fd3ff; --con-blue: #4f7dff; --con-white: #f4f4f4; --con-yellow: #ffd93b; --con-red: #ff5b4b;
+    --outline: #000;
   }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
     font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -60,12 +70,22 @@
   #entries .t { color: var(--muted); margin-right: 4px; font-variant-numeric: tabular-nums; }
   #entries .kill { color: var(--kill); }
   #entries .loot { color: var(--loot); }
-  #entries .plan { color: var(--plan); }
+  #entries .plan, #entries .decision { color: var(--plan); }
+  #entries .chat { color: var(--chat); }
+  #entries .trade { color: var(--trade); }
+  #plan dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0; font-size: 12px; }
+  #plan dt { color: var(--muted); }
+  #plan dd { margin: 0; overflow-wrap: anywhere; }
+  .con { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c);
+    box-shadow: 0 0 0 1px var(--outline); vertical-align: -1px; margin-right: 3px; }
   #entries .level, #entries .good { color: var(--good); }
   #entries .level, #entries .death { font-weight: 600; }
   #entries .death { color: var(--kill); }
   #legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%;
     margin-right: 6px; background: var(--c); vertical-align: -1px; }
+  #legend span.sq::before { border-radius: 1px; }
+  #legend .cons { flex-basis: 100%; display: flex; gap: 3px; align-items: center; color: var(--muted); font-size: 11px; }
+  #legend .cons i { width: 14px; height: 9px; border-radius: 2px; background: var(--c); box-shadow: 0 0 0 1px var(--outline); }
   #tip { position: absolute; pointer-events: none; display: none; white-space: nowrap; }
   #error { top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; max-width: 80%; }
   .muted { color: var(--muted); }
@@ -79,7 +99,8 @@
   <label><input type="checkbox" id="follow" checked> Follow bot</label>
   <span id="layers"></span>
   <label><input type="checkbox" id="labels" checked> Labels</label>
-  <label><input type="checkbox" id="names"> Names</label>
+  <label title="Names and levels next to every spawn"><input type="checkbox" id="names"> Captions</label>
+  <label title="Colour NPCs by how they con to you (grey, green, light blue, blue, white, yellow, red)"><input type="checkbox" id="concol" checked> Con colours</label>
   <label title="The server's navmesh: where characters can walk. The biggest piece is green; each other colour is a separate piece (island) a character can't walk to from the rest. Dashed lines are off-mesh links."><input type="checkbox" id="navmesh"> Navmesh<span id="navinfo" class="muted"></span></label>
   <label title="Fade map and spawns far above or below the bot"><input type="checkbox" id="zfilter"> Height ±<input type="number" id="zrange" value="40" min="5" step="5"></label>
   <input type="text" id="filter" placeholder="Find spawn…">
@@ -87,10 +108,12 @@
 </div>
 <div id="side">
   <div id="legend" class="panel">
-    <span style="--c: var(--me)">You</span><span style="--c: var(--pc)">Player</span><span style="--c: var(--npc)">NPC</span>
-    <span style="--c: var(--pet)">Pet</span><span style="--c: var(--bot)">Bot</span><span style="--c: var(--corpse)">Corpse</span>
+    <span style="--c: var(--me)">You</span><span class="sq" style="--c: var(--pc)">Player</span><span class="sq" style="--c: var(--bot)">Bot</span>
+    <span style="--c: var(--npc)">NPC</span><span style="--c: var(--pet)">Pet</span><span style="--c: var(--corpse)">Corpse</span>
+    <div class="cons" id="conlegend">NPC con <i style="--c: var(--con-gray)"></i><i style="--c: var(--con-green)"></i><i style="--c: var(--con-lblue)"></i><i style="--c: var(--con-blue)"></i><i style="--c: var(--con-white)"></i><i style="--c: var(--con-yellow)"></i><i style="--c: var(--con-red)"></i></div>
   </div>
   <div id="group" class="panel"><h3>Group</h3><div id="members"><span class="muted">&mdash;</span></div></div>
+  <div id="plan" class="panel" hidden><h3>Plan</h3><dl id="planrows"></dl></div>
   <div id="log" class="panel"><h3>Log</h3><div id="entries"></div></div>
 </div>
 <div id="status" class="panel"><span class="muted">Connecting…</span></div>
@@ -117,9 +140,24 @@ function load() { try { return JSON.parse(localStorage.getItem("eqmq-viewer") ||
 function save() {
   try { localStorage.setItem("eqmq-viewer", JSON.stringify({
     labels: $("labels").checked, names: $("names").checked, zfilter: $("zfilter").checked, zrange: $("zrange").value,
-    follow: $("follow").checked, navmesh: $("navmesh").checked })); } catch {}
+    follow: $("follow").checked, navmesh: $("navmesh").checked, concol: $("concol").checked })); } catch {}
 }
-for (const k of ["labels", "names", "zfilter", "follow", "navmesh"]) if (k in prefs) $(k).checked = prefs[k];
+for (const k of ["labels", "names", "zfilter", "follow", "navmesh", "concol"]) if (k in prefs) $(k).checked = prefs[k];
+
+// how a level cons to us: EQEmu's Mob::GetLevelCon (the SoF+ system, the server's default)
+const CON_NAMES = { gray: "grey", green: "green", lblue: "light blue", blue: "blue", white: "white", yellow: "yellow", red: "red" };
+function con(mine, other) {
+  const diff = other - mine;
+  if (diff === 0) return "white";
+  if (diff >= 1 && diff <= 3) return "yellow";
+  if (diff >= 4) return "red";
+  const gray = mine - Math.trunc((mine + 5) / 3), green = mine - Math.trunc((mine + 7) / 4);
+  if (mine <= 15) return diff <= -6 ? "gray" : "blue";
+  if (other <= gray) return "gray";
+  if (other <= green) return "green";
+  return mine > 20 && diff <= -6 ? "lblue" : "blue";
+}
+const conColour = lvl => css("--con-" + con(state.me.level, lvl));
 if (prefs.zrange) $("zrange").value = prefs.zrange;
 
 function resize() {
@@ -261,22 +299,39 @@ function draw() {
 
   if (!state || !state.connected) return;
   const filter = $("filter").value.trim().toLowerCase();
-  const showNames = $("names").checked;
+  const showNames = $("names").checked, conCol = $("concol").checked && state.me.level > 0;
+  const outline = css("--outline");
   ctx.font = "11px system-ui, sans-serif"; ctx.textBaseline = "middle";
+  // players and bots are squares, NPCs and pets circles, corpses crosses
+  const shape = (s, sx, sy, r) => {
+    ctx.beginPath();
+    if (s.t === "PC" || s.t === "Bot") ctx.rect(sx - r, sy - r, 2 * r, 2 * r);
+    else ctx.arc(sx, sy, r, 0, 7);
+  };
   for (const s of state.spawns) {
     if (s.id === state.me.id) continue;
     const [sx, sy] = toScreen(-s.x, -s.y);
     if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
     const match = filter && s.n.toLowerCase().includes(filter);
     ctx.globalAlpha = (filter && !match) ? 0.2 : inZ(s.z) ? 1 : 0.25;
-    ctx.fillStyle = css(TYPE_COLOR[s.t] || "--npc");
     const r = match ? 6 : 4;
-    ctx.beginPath(); ctx.arc(sx, sy, r, 0, 7); ctx.fill();
-    if (s.ai) { ctx.strokeStyle = css("--me"); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(sx, sy, r + 3, 0, 7); ctx.stroke(); }
-    if (s.id === state.me.target) {
-      ctx.strokeStyle = css("--target"); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(sx, sy, r + 6, 0, 7); ctx.stroke();
+    if (s.t === "Corpse") {
+      ctx.strokeStyle = css("--corpse"); ctx.lineWidth = 2; ctx.beginPath();
+      ctx.moveTo(sx - r, sy - r); ctx.lineTo(sx + r, sy + r); ctx.moveTo(sx + r, sy - r); ctx.lineTo(sx - r, sy + r); ctx.stroke();
+    } else {
+      const byCon = conCol && s.t === "NPC";
+      ctx.fillStyle = byCon ? conColour(s.l) : css(TYPE_COLOR[s.t] || "--npc");
+      shape(s, sx, sy, r); ctx.fill();
+      if (byCon) { ctx.strokeStyle = outline; ctx.lineWidth = 1; ctx.stroke(); }  // white and yellow on a light map
     }
-    if (showNames || match || s.id === state.me.target) { ctx.fillStyle = css("--text"); ctx.fillText(s.n, sx + r + 4, sy); }
+    if (s.ai) { ctx.strokeStyle = css("--me"); ctx.lineWidth = 2; shape(s, sx, sy, r + 3); ctx.stroke(); }
+    if (s.id === state.me.target) {
+      ctx.strokeStyle = css("--target"); ctx.lineWidth = 3; shape(s, sx, sy, r + 6); ctx.stroke();
+    }
+    if (showNames || match || s.id === state.me.target) {
+      ctx.fillStyle = css("--text");
+      ctx.fillText(s.t === "Corpse" ? s.n : `${s.n} (${s.l})`, sx + r + 4, sy);
+    }
   }
   ctx.globalAlpha = 1;
 
@@ -295,6 +350,20 @@ function draw() {
 
 function esc(t) { return String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
+// a spawn's con as a coloured dot (NPCs and players alike: it's how the level compares to ours)
+function conDot(s) {
+  if (!state.me.level || s.t === "Corpse") return "";
+  const c = con(state.me.level, s.l);
+  return `<span class="con" style="--c: var(--con-${c})" title="cons ${CON_NAMES[c]}"></span>`;
+}
+
+function renderPlan(plan) {
+  const box = $("plan");
+  box.hidden = !plan || !plan.rows || !plan.rows.length;
+  if (box.hidden) return;
+  $("planrows").innerHTML = plan.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+}
+
 function updateStatus() {
   const el = $("status");
   if (!state || !state.connected) { el.innerHTML = '<span class="muted">Bot not connected</span>'; return; }
@@ -302,7 +371,7 @@ function updateStatus() {
   // /loc order is y, x, z
   el.innerHTML = `<span><b>${esc(me.name)}</b> ${me.hp}% HP</span><span>${esc(state.zone_name)} (${esc(state.zone)})</span>` +
     `<span>Loc ${me.y.toFixed(1)}, ${me.x.toFixed(1)}, ${me.z.toFixed(1)}</span>` +
-    `<span>Target: ${target ? esc(target.n) + " " + target.hp + "%" : '<span class="muted">none</span>'}</span>` +
+    `<span>Target: ${target ? conDot(target) + esc(target.n) + ` <b>L${target.l}</b> ${target.hp}%` : '<span class="muted">none</span>'}</span>` +
     `<span class="muted">${state.spawns.length} spawns</span>`;
 }
 
@@ -342,7 +411,7 @@ function connect() {
     state = JSON.parse(ev.data);
     if (state.connected && state.zone !== zone) { zone = state.zone; await loadMap(); loadNav(); }
     if (state.connected && $("follow").checked) { view.cx = -state.me.x; view.cy = -state.me.y; }
-    updateStatus(); draw(); showTip(); renderGroup(state.group); appendLog(state.log);
+    updateStatus(); draw(); showTip(); renderGroup(state.group); renderPlan(state.plan); appendLog(state.log);
     document.dispatchEvent(new CustomEvent("eqmq-state", { detail: state }));  // for plugins' controls
   };
   es.onerror = () => { $("status").innerHTML = '<span class="muted">Viewer disconnected, retrying…</span>'; };
@@ -380,7 +449,7 @@ function showTip() {
     if (d < bestD) { best = s; bestD = d; }
   }
   if (!best) { tip.style.display = "none"; return; }
-  tip.innerHTML = `<b>${esc(best.n)}</b> <span class="muted">${best.t} ${best.l}${best.ai ? " · AI" : ""}</span><br>` +
+  tip.innerHTML = `${conDot(best)}<b>${esc(best.n)}</b> <span class="muted">${best.t} ${best.l}${best.ai ? " · AI" : ""}</span><br>` +
     `${best.hp}% HP · loc ${best.y.toFixed(0)}, ${best.x.toFixed(0)}, ${best.z.toFixed(0)}`;
   tip.style.display = "block";
   tip.style.left = Math.min(hover.x + 14, innerWidth - tip.offsetWidth - 8) + "px";
@@ -388,7 +457,7 @@ function showTip() {
 }
 
 $("fit").onclick = fit;
-for (const id of ["labels", "names", "zfilter", "zrange", "follow"]) $(id).addEventListener("change", () => { save(); draw(); });
+for (const id of ["labels", "names", "zfilter", "zrange", "follow", "concol"]) $(id).addEventListener("change", () => { save(); draw(); });
 $("filter").addEventListener("input", draw);
 $("navmesh").addEventListener("change", () => { save(); if ($("navmesh").checked && !nav) loadNav(); else draw(); });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);

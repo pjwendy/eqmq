@@ -40,15 +40,17 @@ CLASS_SHORT = {1: "WAR", 2: "CLR", 3: "PAL", 4: "RNG", 5: "SHD", 6: "DRU", 7: "M
                11: "NEC", 12: "WIZ", 13: "MAG", 14: "ENC", 15: "BST", 16: "BER"}
 NO_MANA = {1, 7, 9, 16}  # warriors, monks, rogues, berserkers
 
-# game text worth a line in the page's log, and how to colour it
+# game text worth a line in the page's log, and how to colour it (chat has its own handler)
 LOG_LINES = [
     (re.compile(r"welcome to level|you have gained a level", re.I), "level"),
     (re.compile(r"you have been slain|you died", re.I), "death"),
     (re.compile(r"you have slain|has been slain by", re.I), "kill"),
     (re.compile(r"you gain (party |group |raid )?experience|you have gained .* experience", re.I), "good"),
     (re.compile(r"you have looted|you receive \d+ ", re.I), "loot"),
+    (re.compile(r"\btrad(e|ing)\b|gives you|you give|has offered you", re.I), "trade"),
     (re.compile(r"you have learned|you have scribed|have accepted", re.I), "good"),
 ]
+SLAIN = re.compile(r"^(.+?) (?:has been slain by|died)", re.I)
 
 
 def parse_map_file(path: str) -> dict:
@@ -132,25 +134,42 @@ class MapViewer(MQPlugin):
         self._page = page.encode("utf-8")
         self._log: collections.deque = collections.deque(maxlen=500)
         self._log_id = 0
+        self._chat_line = ""
+        # fn() -> {"rows": [[label, text], ...]} or None: what the shown character is doing and why,
+        # in its own panel (an AI layer sets it; the SDK has no plans of its own)
+        self.plan = None
 
     def note(self, text: str, kind: str = "info") -> None:
-        """Add a line to the page's log (kinds: info, plan, kill, loot, level, death, good)."""
+        """Add a line to the page's log (kinds: info, decision, chat, trade, kill, loot, level, death, good)."""
         self._log_id += 1
         self._log.append({"id": self._log_id, "t": time.strftime("%H:%M"), "kind": kind, "text": str(text)[:300]})
 
+    def _on_chat(self, chat) -> None:
+        self._chat_line = chat.Line  # the "line" handler gets it next: don't log it twice
+        self.note(chat.Line, "chat")
+
     def _on_line(self, line: str) -> None:
+        if line == self._chat_line:
+            self._chat_line = ""
+            return
+        m = SLAIN.match(line)
+        if m and self.bot.Group and any(g.Name.lower() == m.group(1).lower() for g in self.bot.Group.All):
+            self.note(line, "death")  # one of the group died
+            return
         for pattern, kind in LOG_LINES:
             if pattern.search(line):
                 self.note(line, kind)
                 return
 
     async def on_load(self) -> None:
+        self.bot.on("chat")(self._on_chat)
         self.bot.on("line")(self._on_line)
         self._server = await asyncio.start_server(self._handle, self.host, self.port)
         log.info("map viewer at http://%s:%d", self.host, self.port)
         print(f"eqmq-viewer: http://{self.host}:{self.port}", flush=True)
 
     async def on_clean(self) -> None:
+        self.bot.off("chat", self._on_chat)
         self.bot.off("line", self._on_line)
         if self._server:
             self._server.close()
@@ -182,12 +201,19 @@ class MapViewer(MQPlugin):
                           "hp": s.PctHPs if s else 0, "mana": s.PctMana if s else 0,
                           "has_mana": bool(s and s.ClassID not in NO_MANA), "leader": bool(m and m.Leader),
                           "here": s is not None})
+        plan = None
+        if self.plan:
+            try:
+                plan = self.plan()
+            except Exception:
+                log.debug("plan failed", exc_info=True)
         return {
             "group": group,
+            "plan": plan,
             "connected": bot.connected,
             "zone": zone.ShortName,
             "zone_name": zone.Name,
-            "me": {"id": me.ID, "name": me.Name, "x": me.X, "y": me.Y, "z": me.Z, "heading": me.Heading,
+            "me": {"id": me.ID, "name": me.Name, "level": me.Level, "x": me.X, "y": me.Y, "z": me.Z, "heading": me.Heading,
                    "target": me.TargetID, "hp": me.PctHPs},
             "spawns": [
                 {"id": s.ID, "n": s.Name, "t": s.Type, "l": s.Level, "x": round(s.X, 1), "y": round(s.Y, 1),
