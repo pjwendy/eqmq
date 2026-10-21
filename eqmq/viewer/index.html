@@ -418,32 +418,71 @@ function connect() {
   es.onerror = () => { $("status").innerHTML = '<span class="muted">Viewer disconnected, retrying…</span>'; };
 }
 
-// pan and zoom
-let drag = null;
-canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY }; canvas.classList.add("drag"); canvas.setPointerCapture(e.pointerId); });
-canvas.addEventListener("pointermove", e => {
-  if (drag) {
-    view.cx -= (e.clientX - drag.x) / view.scale; view.cy -= (e.clientY - drag.y) / view.scale;
-    drag = { x: e.clientX, y: e.clientY };
-    if ($("follow").checked) { $("follow").checked = false; save(); }
-    draw();
-  }
-  hover = { x: e.clientX, y: e.clientY }; showTip();
+// pan and zoom: drag with a mouse or one finger, zoom with the wheel or by pinching
+const pointers = new Map();  // pointer id -> where it is on the canvas
+let pinch = null;            // { d: finger distance, mx, my: the map point between the fingers }
+const onCanvas = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+function zoomAt(sx, sy, factor) {
+  // zoom about a screen point, keeping the map point under it where it is (unless following)
+  const [bx, by] = toMap(sx, sy);
+  view.scale = Math.min(Math.max(view.scale * factor, 0.01), 50);
+  if (!$("follow").checked) { const [ax, ay] = toMap(sx, sy); view.cx += bx - ax; view.cy += by - ay; }
+}
+function startPinch() {
+  const [a, b] = [...pointers.values()];
+  const [mx, my] = toMap((a.x + b.x) / 2, (a.y + b.y) / 2);
+  pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx, my };
+}
+canvas.addEventListener("pointerdown", e => {
+  pointers.set(e.pointerId, onCanvas(e));
+  canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add("drag");
+  if (pointers.size === 2) startPinch();
+  // a touch has no hover: a tap shows what's under the finger
+  if (e.pointerType !== "mouse") { hover = pointers.size === 1 ? { x: e.clientX, y: e.clientY } : null; showTip(); }
 });
-canvas.addEventListener("pointerup", () => { drag = null; canvas.classList.remove("drag"); });
-canvas.addEventListener("pointerleave", () => { hover = null; showTip(); });
+canvas.addEventListener("pointermove", e => {
+  const p = onCanvas(e), last = pointers.get(e.pointerId);
+  if (last) {
+    pointers.set(e.pointerId, p);
+    if (pointers.size >= 2 && pinch) {
+      const [a, b] = [...pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      view.scale = Math.min(Math.max(view.scale * d / pinch.d, 0.01), 50);
+      pinch.d = d;
+      if (!$("follow").checked) {
+        // the map point that was between the fingers stays between them (two-finger pan too)
+        const [ax, ay] = toMap((a.x + b.x) / 2, (a.y + b.y) / 2);
+        view.cx += pinch.mx - ax; view.cy += pinch.my - ay;
+      }
+      draw();
+    } else if (pointers.size === 1) {
+      view.cx -= (p.x - last.x) / view.scale; view.cy -= (p.y - last.y) / view.scale;
+      if (hover) hover.moved = true;  // panning, not pointing at something
+      if ($("follow").checked) { $("follow").checked = false; save(); }
+      draw();
+    }
+  }
+  if (e.pointerType === "mouse") { hover = { x: e.clientX, y: e.clientY }; showTip(); }
+});
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  pinch = null;
+  if (pointers.size === 2) startPinch();
+  if (!pointers.size) canvas.classList.remove("drag");
+}
+canvas.addEventListener("pointerup", endPointer);
+canvas.addEventListener("pointercancel", endPointer);
+canvas.addEventListener("pointerleave", e => { if (e.pointerType === "mouse") { hover = null; showTip(); } });
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
-  const [bx, by] = toMap(e.offsetX, e.offsetY);
-  view.scale *= Math.exp(-e.deltaY * 0.0015);
-  view.scale = Math.min(Math.max(view.scale, 0.01), 50);
-  if (!$("follow").checked) { const [ax, ay] = toMap(e.offsetX, e.offsetY); view.cx += bx - ax; view.cy += by - ay; }
+  zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * 0.0015));
   draw();
 }, { passive: false });
 
 function showTip() {
   const tip = $("tip");
-  if (!hover || !state || !state.connected || drag) { tip.style.display = "none"; return; }
+  if (!hover || !state || !state.connected || pinch || (pointers.size && hover.moved)) { tip.style.display = "none"; return; }
   let best = null, bestD = 10;
   for (const s of state.spawns) {
     const [sx, sy] = toScreen(-s.x, -s.y), d = Math.hypot(sx - hover.x, sy - hover.y);
