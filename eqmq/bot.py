@@ -70,7 +70,8 @@ class NavNote:
     """Where a walk found the zone's navmesh wanting (MoveResult.Nav). Kind: "no_mesh_here" (none
     where we stood), "no_mesh_there" (none at the destination), "not_connected" (no way between:
     Closest is where it gets nearest), "stuck" (walked into something it says isn't there), or a gap
-    the walk went round: "door_gap", "off_mesh", "straight_walk" (To: where it stepped or walked to).
+    the walk went round: "off_mesh", "straight_walk" (To: where it stepped or walked to); and doors it
+    couldn't open: "locked", "door_wont_open".
     Points are (x, y, z)."""
     Kind: str
     At: tuple[float, float, float]
