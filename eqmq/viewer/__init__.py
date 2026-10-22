@@ -231,7 +231,7 @@ class MapViewer(MQPlugin):
             "zone": zone.ShortName,
             "zone_name": zone.Name,
             "me": {"id": me.ID, "name": me.Name, "level": me.Level, "x": me.X, "y": me.Y, "z": me.Z, "heading": me.Heading,
-                   "target": me.TargetID, "hp": me.PctHPs},
+                   "target": me.TargetID, "hp": me.PctHPs, "hour": me.GameHour},
             "spawns": [
                 {"id": s.ID, "n": s.Name, "t": s.Type, "l": s.Level, "x": round(s.X, 1), "y": round(s.Y, 1),
                  "z": round(s.Z, 1), "h": round(s.Heading), "hp": s.PctHPs, "ai": s.Headless}

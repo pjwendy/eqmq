@@ -390,6 +390,7 @@ function updateStatus() {
   el.innerHTML = `<span><b>${esc(me.name)}</b> ${me.hp}% HP</span><span>${esc(state.zone_name)} (${esc(state.zone)})</span>` +
     `<span>Loc ${me.y.toFixed(1)}, ${me.x.toFixed(1)}, ${me.z.toFixed(1)}</span>` +
     `<span>Target: ${target ? conDot(target) + esc(target.n) + ` <b>L${target.l}</b> ${target.hp}%` : '<span class="muted">none</span>'}</span>` +
+    (me.hour ? `<span title="EQ time: an hour is 3 real minutes; night is 21:00-7:00">${me.hour >= 21 || me.hour < 7 ? "☾" : "☀"} ${String(me.hour % 24).padStart(2, "0")}:00</span>` : "") +
     `<span class="muted">${state.spawns.length} spawns</span>`;
 }
 
