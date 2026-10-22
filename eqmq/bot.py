@@ -17,7 +17,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Spawn, Zone
 
-SDK_VERSION = "eqmq/0.14"
+SDK_VERSION = "eqmq/0.15"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -66,6 +66,19 @@ class Refused(Exception):
 
 
 @dataclass(frozen=True)
+class NavNote:
+    """Where a walk found the zone's navmesh wanting (MoveResult.Nav). Kind: "no_mesh_here" (none
+    where we stood), "no_mesh_there" (none at the destination), "not_connected" (no way between:
+    Closest is where it gets nearest), "stuck" (walked into something it says isn't there), or a gap
+    the walk went round: "door_gap", "off_mesh", "straight_walk" (To: where it stepped or walked to).
+    Points are (x, y, z)."""
+    Kind: str
+    At: tuple[float, float, float]
+    To: tuple[float, float, float]
+    Closest: tuple[float, float, float]
+
+
+@dataclass(frozen=True)
 class MoveResult:
     """How a /moveto ended: "ARRIVED", "STOPPED", "STUCK", "NO_PATH", "ZONE_LINE", "LOCKED" (a door
     on the way that it has no key for) or "REFUSED" (the server didn't take the command: Error says
@@ -75,6 +88,7 @@ class MoveResult:
     Y: float
     Z: float
     Error: str = ""
+    Nav: tuple[NavNote, ...] = ()  # what the walk found wrong with the navmesh, if anything
 
     @property
     def Loc(self) -> str:
@@ -1095,7 +1109,9 @@ class Bot:
             return
         if kind == "move":
             m = event.move
-            done = MoveResult(pb.MoveStatus.Name(m.status).removeprefix("MOVE_"), m.x, m.y, m.z)
+            nav = tuple(NavNote(n.kind, (n.x, n.y, n.z), (n.to_x, n.to_y, n.to_z), (n.closest_x, n.closest_y, n.closest_z))
+                        for n in m.nav)
+            done = MoveResult(pb.MoveStatus.Name(m.status).removeprefix("MOVE_"), m.x, m.y, m.z, Nav=nav)
             waiters, self._move_waiters = self._move_waiters, []
             for fut in waiters:
                 if not fut.done():
