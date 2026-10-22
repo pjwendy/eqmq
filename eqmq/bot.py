@@ -678,6 +678,17 @@ class Bot:
         cmd.parcel_retrieve.item_id = parcel.ItemID
         return await self.command(cmd)
 
+    async def destroy(self, item: Item | int) -> CommandResult:
+        """Destroy an item (all of a stack), as the client's Destroy button: pick it up (whatever was
+        on the cursor goes where it was) and destroy what's on the cursor."""
+        slot = item if isinstance(item, int) else item.Slot
+        if slot != CURSOR_SLOT:
+            moved = await self.move_item(slot, CURSOR_SLOT)
+            if not moved:
+                return moved
+            await asyncio.sleep(0.5)
+        return await self.move_item(CURSOR_SLOT, -1)
+
     async def move_item(self, from_slot: int, to_slot: int, quantity: int = 0) -> CommandResult:
         """Move an item, swapping with whatever is there: equip it, or put a bag in a general slot."""
         cmd = pb.Command()
