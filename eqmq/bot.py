@@ -449,6 +449,23 @@ class Bot:
             await self.stop()
             return MoveResult("STOPPED", *(self._pos()))
 
+    async def surface(self, timeout: float = 30) -> MoveResult:
+        """Under water: swim straight up to the surface for air (Me.Air: seconds left). The MoveResult
+        when there, or REFUSED with why not (not under water, something solid above)."""
+        cmd = pb.Command()
+        cmd.surface.SetInParent()
+        fut = asyncio.get_running_loop().create_future()
+        self._move_waiters.append(fut)
+        result = await self.command(cmd)
+        if not result:
+            self._move_waiters.remove(fut)
+            return MoveResult("REFUSED", *(self._pos()), Error=result.error)
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            await self.stop()
+            return MoveResult("STOPPED", *(self._pos()))
+
     async def route_length(self, x: float, y: float, z: float | None = None, timeout: float = 5) -> float | None:
         """How far a walk to (in-game x, y, z) would be along the navmesh, without walking; None if
         there's no way there. A walk under way carries on."""
