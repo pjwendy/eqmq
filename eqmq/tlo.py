@@ -244,6 +244,8 @@ class Me:
     RunSpeed: float = 0.0   # how fast a walk goes now, units per second (0: rooted, or an older server)
     Disciplines: tuple = () # spell ids of the disciplines you know (bot.discipline())
     GameHour: int = 0       # the zone's EQ hour, 1-24 (0: an older server); an EQ hour is 3 real minutes
+    Air: int = 0            # seconds of air left under water (full whenever you can breathe; at none you drown)
+    MaxAir: int = 0         # seconds of air at most (Stamina, Lung Capacity)
 
     @property
     def Night(self) -> bool:
@@ -312,7 +314,7 @@ class Me:
             Platinum=m.platinum, Gold=m.gold, Silver=m.silver, Copper=m.copper, Haters=tuple(m.haters),
             Weight=m.weight, Capacity=m.capacity, RaceBit=m.race_bit,
             ExpPct=m.exp_pct, AAExpPct=m.aa_exp_pct, AAPoints=m.aa_points, AASplit=m.aa_split, RunSpeed=m.run_speed,
-            Disciplines=tuple(m.disciplines), GameHour=m.game_hour,
+            Disciplines=tuple(m.disciplines), GameHour=m.game_hour, Air=m.air, MaxAir=m.max_air,
         )
 
 
