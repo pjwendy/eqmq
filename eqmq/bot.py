@@ -817,8 +817,9 @@ class Bot:
 
         return wait()
 
-    async def zone_to(self, short_name: str, timeout: float | None = None) -> ZoneChange:
-        """Walk to this zone's zone line for a neighbouring zone (see Zone.Exits) and through it.
+    async def zone_to(self, short_name: str, timeout: float | None = None, number: int = 0) -> ZoneChange:
+        """Walk to this zone's zone line for a neighbouring zone (see Zone.Exits) and through it: the one
+        with the shortest walk from here, or zone point `number` (a zone with several ways into another).
 
         Returns once you're in the new zone (ARRIVED), or why not (REFUSED, TIMEOUT). The timeout
         defaults to the walk to the nearest such zone line at your run speed (at least 5 minutes).
@@ -831,6 +832,7 @@ class Bot:
         done = self.wait_zoned(timeout)  # listening before we start walking
         cmd = pb.Command()
         cmd.zone_to.zone = short_name
+        cmd.zone_to.number = number
         result = await self.command(cmd)
         if not result:
             done.close()
