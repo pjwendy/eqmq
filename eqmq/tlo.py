@@ -243,6 +243,12 @@ class Me:
     AASplit: int = 0        # share of experience going to AA, 0-100
     RunSpeed: float = 0.0   # how fast a walk goes now, units per second (0: rooted, or an older server)
     Disciplines: tuple = () # spell ids of the disciplines you know (bot.discipline())
+    GameHour: int = 0       # the zone's EQ hour, 1-24 (0: an older server); an EQ hour is 3 real minutes
+
+    @property
+    def Night(self) -> bool:
+        """EQ night, 21:00 to 7:00 (when the night spawns of Kithicor and others are up)."""
+        return bool(self.GameHour) and (self.GameHour >= 21 or self.GameHour < 7)
 
     @property
     def PctHPs(self) -> int:
@@ -306,7 +312,7 @@ class Me:
             Platinum=m.platinum, Gold=m.gold, Silver=m.silver, Copper=m.copper, Haters=tuple(m.haters),
             Weight=m.weight, Capacity=m.capacity, RaceBit=m.race_bit,
             ExpPct=m.exp_pct, AAExpPct=m.aa_exp_pct, AAPoints=m.aa_points, AASplit=m.aa_split, RunSpeed=m.run_speed,
-            Disciplines=tuple(m.disciplines),
+            Disciplines=tuple(m.disciplines), GameHour=m.game_hour,
         )
 
 
