@@ -105,6 +105,13 @@ class Item:
     Races: int = 0        # bitmask of EQ race bits (see RaceBit on Me / BotGear)
     ScrollSpell: int = 0  # a spell scroll: the spell it teaches
     ScrollLevel: int = 0  # ... the level your class learns it (0: not your class)
+    BagWR: int = 0        # containers: weight reduction, percent
+    BagType: int = 0      # containers: EQ bag type (0-8 storage; 9 and up tradeskill: mixing bowl, forge...)
+
+    @property
+    def StorageBag(self) -> bool:
+        """A container for carrying things (a bag, pouch, backpack, chest, quiver), not a tradeskill one."""
+        return self.Container and self.BagType <= 8
 
     @property
     def Banked(self) -> bool:
@@ -126,7 +133,7 @@ class Item:
         return Item(i.slot, i.item_id, i.name, i.charges, i.container, i.ac, i.hp, i.mana, i.endurance, i.str,
                     i.sta, i.agi, i.dex, i.wis, getattr(i, "int"), i.cha, i.damage, i.delay, i.slots, i.req_level,
                     i.weight, i.price, i.no_drop, i.lore, i.magic, i.bag_slots, i.bag_size, i.item_type, i.usable,
-                    i.classes, i.races, i.scroll_spell, i.scroll_level)
+                    i.classes, i.races, i.scroll_spell, i.scroll_level, i.bag_wr, i.bag_type)
 
 
 @dataclass(frozen=True)
