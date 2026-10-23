@@ -442,7 +442,8 @@ class Bot:
         self._move_waiters.append(fut)
         result = await self.command(cmd)
         if not result:
-            self._move_waiters.remove(fut)
+            if fut in self._move_waiters:  # (a move event may have taken the waiters already)
+                self._move_waiters.remove(fut)
             return MoveResult("REFUSED", *(self._pos()), Error=result.error)
         try:
             return await asyncio.wait_for(fut, timeout)
@@ -466,7 +467,8 @@ class Bot:
         self._move_waiters.append(fut)
         result = await self.command(cmd)
         if not result:
-            self._move_waiters.remove(fut)
+            if fut in self._move_waiters:  # (a move event may have taken the waiters already)
+                self._move_waiters.remove(fut)
             return MoveResult("REFUSED", *(self._pos()), Error=result.error)
         try:
             return await asyncio.wait_for(fut, timeout)
