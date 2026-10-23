@@ -124,11 +124,12 @@ class LootResult:
     CorpseID: int
     ok: bool
     Error: str = ""
-    Items: tuple = ()     # what we tried to loot; game messages say what we got
+    Items: tuple = ()     # what came off the corpse
     Platinum: int = 0
     Gold: int = 0
     Silver: int = 0
     Copper: int = 0
+    Left: tuple = ()      # what's still on it (no room for it, or it wouldn't come)
 
     def __bool__(self) -> bool:
         return self.ok
@@ -1089,7 +1090,8 @@ class Bot:
             return
         if kind == "loot":
             lt = event.loot
-            res = LootResult(lt.corpse_id, lt.ok, lt.error, tuple(lt.items), lt.platinum, lt.gold, lt.silver, lt.copper)
+            res = LootResult(lt.corpse_id, lt.ok, lt.error, tuple(lt.items), lt.platinum, lt.gold, lt.silver, lt.copper,
+                             tuple(lt.left))
             for fut in self._loot_waiters.pop(lt.corpse_id, []):
                 if not fut.done():
                     fut.set_result(res)
