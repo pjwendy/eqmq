@@ -451,6 +451,20 @@ class Bot:
             await self.stop()
             return MoveResult("STOPPED", *(self._pos()))
 
+    async def drag_corpse(self, corpse: Spawn | int) -> CommandResult:
+        """/corpse drag: a corpse (yours, or one you're consented to) follows you as you move, within the
+        server's drag distance (Character:DragCorpseDistance)."""
+        cmd = pb.Command()
+        cmd.corpse_drag.corpse_id = corpse if isinstance(corpse, int) else corpse.ID
+        return await self.command(cmd)
+
+    async def drop_corpse(self, corpse: Spawn | int | None = None) -> CommandResult:
+        """/corpse drop: stop dragging a corpse (None: every corpse you drag)."""
+        cmd = pb.Command()
+        cmd.corpse_drag.corpse_id = 0 if corpse is None else (corpse if isinstance(corpse, int) else corpse.ID)
+        cmd.corpse_drag.drop = True
+        return await self.command(cmd)
+
     async def aa_exp(self, percent: int) -> CommandResult:
         """The share of experience going to AA, as the client's AA window slider (0 off, 100: no more
         levels; Me.AASplit says what it is)."""
