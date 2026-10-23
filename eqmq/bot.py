@@ -450,6 +450,13 @@ class Bot:
             await self.stop()
             return MoveResult("STOPPED", *(self._pos()))
 
+    async def aa_exp(self, percent: int) -> CommandResult:
+        """The share of experience going to AA, as the client's AA window slider (0 off, 100: no more
+        levels; Me.AASplit says what it is)."""
+        cmd = pb.Command()
+        cmd.aa_exp.percent = max(0, min(100, int(percent)))
+        return await self.command(cmd)
+
     async def surface(self, timeout: float = 30) -> MoveResult:
         """Under water: swim straight up to the surface for air (Me.Air: seconds left). The MoveResult
         when there, or REFUSED with why not (not under water, something solid above)."""
