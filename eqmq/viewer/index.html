@@ -384,8 +384,9 @@ function renderPlan(plan) {
 
 function updateStatus() {
   const el = $("status");
-  if (!state || !state.connected) { el.innerHTML = '<span class="muted">Bot not connected</span>'; return; }
+  if (!state || !state.connected) { el.innerHTML = '<span class="muted">Bot not connected</span>'; document.title = "eqmq Map Viewer"; return; }
   const me = state.me, target = state.spawns.find(s => s.id === me.target);
+  document.title = `${me.name}: ${state.zone_name || state.zone}`;  // (the tab says who and where)
   // /loc order is y, x, z
   el.innerHTML = `<span><b>${esc(me.name)}</b> ${me.hp}% HP</span><span>${esc(state.zone_name)} (${esc(state.zone)})</span>` +
     `<span>Loc ${me.y.toFixed(1)}, ${me.x.toFixed(1)}, ${me.z.toFixed(1)}</span>` +
