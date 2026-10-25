@@ -97,6 +97,17 @@ class MoveResult:
 
 
 @dataclass(frozen=True)
+class PackItem:
+    """Something one of your bots carries in its pack (Bot.pack_list): its slot there, the item, how many,
+    and whether it's a bag (the bags hold the rest)."""
+    Slot: int
+    ID: int
+    Count: int
+    Name: str
+    Bag: bool = False
+
+
+@dataclass(frozen=True)
 class ZoneChange:
     """A zone change: "LEAVING" (on the way), "ARRIVED" (in Zone, state is fresh) or "REFUSED"."""
     Status: str
@@ -803,6 +814,78 @@ class Bot:
         finally:
             if watch in self._handlers["line"]:
                 self._handlers["line"].remove(watch)
+
+    async def _pack(self, command: str, until, timeout: float = 4) -> list[str]:
+        """Send a ^pack command and collect what it says ("pack ..." lines) until until(line) or timeout."""
+        said: list[str] = []
+        done = asyncio.Event()
+
+        def watch(line: str) -> None:
+            text = line.strip()
+            if text.startswith("pack"):
+                said.append(text)
+                if until(text):
+                    done.set()
+
+        self._handlers["line"].append(watch)
+        try:
+            result = await self.DoCommand(f"/bot ^pack {command}")
+            if not result:
+                return [f"pack: {result.error}"]
+            try:
+                await asyncio.wait_for(done.wait(), timeout)
+            except asyncio.TimeoutError:
+                pass
+            return said
+        finally:
+            if watch in self._handlers["line"]:
+                self._handlers["line"].remove(watch)
+
+    async def pack_give(self, bot_name: str, item: Item | int, timeout: float = 4) -> CommandResult:
+        """Put an item from your inventory into one of your bots' packs (^pack: its general slots and the
+        bags in them, carried, not worn): onto a stack of the same, a bag into a free slot, anything else
+        into a bag with room. A bag must be empty. Not while engaged or trading."""
+        from_slot = item if isinstance(item, int) else item.Slot
+        if from_slot != CURSOR_SLOT:
+            if any(i.Slot == CURSOR_SLOT for i in self.Inventory()):
+                return CommandResult(False, "something else is on the cursor")
+            moved = await self.move_item(from_slot, CURSOR_SLOT)
+            if not moved:
+                return moved
+            await asyncio.sleep(0.4)
+        said = await self._pack(f"give byname {bot_name}", lambda t: ":" in t, timeout)
+        last = said[-1] if said else ""
+        if " took " in last:
+            return CommandResult(True)
+        return CommandResult(False, last or f"{bot_name} said nothing")
+
+    async def pack_list(self, bot_name: str, timeout: float = 4) -> tuple[list[PackItem], int]:
+        """What one of your bots carries in its pack ([PackItem], best read once per town trip), and how
+        many more things it has room for."""
+        said = await self._pack(f"list byname {bot_name}", lambda t: "room for" in t, timeout)
+        items, room = [], 0
+        for text in said:
+            if "room for" in text:
+                try:
+                    room = int(text.rsplit("room for", 1)[1].split()[0])
+                except (ValueError, IndexError):
+                    pass
+                continue
+            parts = text.split(" ", 5)  # pack <slot> <item id> <count> <bag|item> <name>
+            if len(parts) == 6 and parts[1].lstrip("-").isdigit() and parts[4] in ("bag", "item"):
+                items.append(PackItem(int(parts[1]), int(parts[2]), int(parts[3]), parts[5], parts[4] == "bag"))
+        return items, room
+
+    async def pack_take(self, bot_name: str, slot: int, timeout: float = 4) -> CommandResult:
+        """Take back what's in a pack slot (PackItem.Slot) of one of your bots: it comes to your cursor
+        (put it away with move_item). A bag only when it's empty; not a lore item you already have."""
+        if any(i.Slot == CURSOR_SLOT for i in self.Inventory()):
+            return CommandResult(False, "something else is on the cursor")
+        said = await self._pack(f"take {slot} byname {bot_name}", lambda t: ":" in t, timeout)
+        last = said[-1] if said else ""
+        if " gave back " in last:
+            return CommandResult(True)
+        return CommandResult(False, last or f"{bot_name} said nothing")
 
     async def scribe(self, scroll: Item, book_slot: int | None = None) -> CommandResult:
         """Scribe a spell scroll from your inventory into the spellbook, as the client: pick it up,
