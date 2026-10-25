@@ -465,6 +465,20 @@ class Bot:
         cmd.corpse_drag.drop = True
         return await self.command(cmd)
 
+    async def click_door(self, door_id: int, timeout: float = 30.0) -> ZoneChange:
+        """Click a door in this zone by its door id (0-255), as the client does: stand within its reach
+        first. A door with a destination (a teleporter, a Plane of Knowledge book) zones you where it
+        goes: returns once you're there (ARRIVED), or why not (REFUSED: the server's reason; TIMEOUT:
+        clicked, but nothing took you anywhere: too far, or a door that only opens)."""
+        done = self.wait_zoned(timeout)  # (listening before we click)
+        cmd = pb.Command()
+        cmd.click_door.door_id = door_id
+        result = await self.command(cmd)
+        if not result:
+            done.close()
+            return ZoneChange("REFUSED", "", 0, result.error)
+        return await done
+
     async def aa_exp(self, percent: int) -> CommandResult:
         """The share of experience going to AA, as the client's AA window slider (0 off, 100: no more
         levels; Me.AASplit says what it is)."""
