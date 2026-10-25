@@ -481,6 +481,9 @@ class Bot:
         first. A door with a destination (a teleporter, a Plane of Knowledge book) zones you where it
         goes: returns once you're there (ARRIVED), or why not (REFUSED: the server's reason; TIMEOUT:
         clicked, but nothing took you anywhere: too far, or a door that only opens)."""
+        start = self.Zone.ShortName if self.Zone else ""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
         done = self.wait_zoned(timeout)  # (listening before we click)
         cmd = pb.Command()
         cmd.click_door.door_id = door_id
@@ -488,7 +491,12 @@ class Bot:
         if not result:
             done.close()
             return ZoneChange("REFUSED", "", 0, result.error)
-        return await done
+        change = await done
+        # an arrival in the zone we clicked from isn't the door's (a zoning still settling: Eboola's first
+        # two books "arrived" in the Plane of Knowledge she'd just come to): wait on for the real one
+        while change.Status == "ARRIVED" and change.Zone == start and loop.time() < deadline:
+            change = await self.wait_zoned(max(1.0, deadline - loop.time()))
+        return change
 
     async def aa_exp(self, percent: int) -> CommandResult:
         """The share of experience going to AA, as the client's AA window slider (0 off, 100: no more
