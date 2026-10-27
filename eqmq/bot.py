@@ -436,17 +436,19 @@ class Bot:
         return await self.sit(False)
 
     async def moveto(self, x: float, y: float, z: float | None = None, wait: bool = False,
-                     timeout: float = 300) -> CommandResult | MoveResult:
+                     timeout: float = 300, avoid: bool = False) -> CommandResult | MoveResult:
         """Walk to a point (in-game x, y, z; /loc prints y first) along the navmesh at run speed.
 
         With wait=True, returns the MoveResult when the walk ends instead of the CommandResult (a
         refused command is a MoveResult too, with Status "REFUSED"), so callers can always read Status.
-        z defaults to your current height; the server keeps you on the floor either way.
+        z defaults to your current height; the server keeps you on the floor either way. avoid=True keeps
+        round the mobs that would aggro you where there's a way (zone_to always does).
         """
         me = self._state.me
         cmd = pb.Command()
         cmd.move_to.x, cmd.move_to.y = x, y
         cmd.move_to.z = z if z is not None else (me.z if me else 0.0)
+        cmd.move_to.avoid = avoid
         if not wait:
             return await self.command(cmd)
         fut = asyncio.get_running_loop().create_future()
