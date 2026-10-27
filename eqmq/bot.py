@@ -537,6 +537,24 @@ class Bot:
             self._plan_waiters.remove(fut)
             return None
         try:
+            plan = await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            return None
+        return plan[0] if plan else None
+
+    async def zone_plan(self, short_name: str, number: int = 0, timeout: float = 5) -> tuple[float, float] | None:
+        """The walk zone_to would take to this zone's zone line for a neighbouring zone, without walking:
+        (its length, how much of it is a swim), or None if there's no way there. A walk under way carries on."""
+        cmd = pb.Command()
+        cmd.zone_to.zone = short_name
+        cmd.zone_to.number = number
+        cmd.zone_to.plan_only = True
+        fut = asyncio.get_running_loop().create_future()
+        self._plan_waiters.append(fut)
+        if not await self.command(cmd):
+            self._plan_waiters.remove(fut)
+            return None
+        try:
             return await asyncio.wait_for(fut, timeout)
         except asyncio.TimeoutError:
             return None
@@ -1251,11 +1269,11 @@ class Bot:
             return
         if kind == "move" and event.move.plan_only:
             m = event.move
-            length = m.route_length if m.status == pb.MOVE_ARRIVED else None
+            plan = (m.route_length, m.swim_length) if m.status == pb.MOVE_ARRIVED else None
             waiters, self._plan_waiters = self._plan_waiters, []
             for fut in waiters:
                 if not fut.done():
-                    fut.set_result(length)
+                    fut.set_result(plan)
             return
         if kind == "move":
             m = event.move
