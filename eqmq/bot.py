@@ -1021,7 +1021,8 @@ class Bot:
         self._zone_waiters.append(fut)
         result = await self.say(f"#zone {short_name}")
         if not result:
-            self._zone_waiters.remove(fut)
+            if fut in self._zone_waiters:  # (a lost connection clears the waiters itself)
+                self._zone_waiters.remove(fut)
             return ZoneChange("REFUSED", short_name, 0, result.error)
         try:
             return await asyncio.wait_for(fut, timeout)
