@@ -761,9 +761,20 @@ class Bot:
     async def give(self, npc: Spawn | int, item: Item | int, quantity: int = 0) -> CommandResult:
         """Hand an item from your inventory (all of a stack by default) to an NPC beside you, as the trade
         window does: its script takes it (a quest's hand-in). Not while it's fighting."""
+        slot = item if isinstance(item, int) else item.Slot
+        if slot != CURSOR_SLOT:
+            # the trade window takes only what's on the cursor (the server kicks a client that moves anything else
+            # into it: "Trade with non-cursor item", which put a soulstone's giver in a login loop): pick it up first
+            if any(i.Slot == CURSOR_SLOT for i in self.Inventory()):
+                return CommandResult(ok=False, error="something is already on the cursor")
+            moved = await self.move_item(slot, CURSOR_SLOT, quantity)
+            if not moved:
+                return moved
+            await asyncio.sleep(0.5)
+            slot = CURSOR_SLOT
         cmd = pb.Command()
         cmd.give.npc_id = npc if isinstance(npc, int) else npc.ID
-        cmd.give.slot = item if isinstance(item, int) else item.Slot
+        cmd.give.slot = slot
         cmd.give.quantity = quantity
         return await self.command(cmd)
 
