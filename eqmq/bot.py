@@ -758,6 +758,15 @@ class Bot:
         cmd.buy.quantity = quantity
         return await self.command(cmd)
 
+    async def give(self, npc: Spawn | int, item: Item | int, quantity: int = 0) -> CommandResult:
+        """Hand an item from your inventory (all of a stack by default) to an NPC beside you, as the trade
+        window does: its script takes it (a quest's hand-in). Not while it's fighting."""
+        cmd = pb.Command()
+        cmd.give.npc_id = npc if isinstance(npc, int) else npc.ID
+        cmd.give.slot = item if isinstance(item, int) else item.Slot
+        cmd.give.quantity = quantity
+        return await self.command(cmd)
+
     async def sell(self, npc: Spawn | int, item: Item | int, quantity: int = 0) -> CommandResult:
         """Sell an item from your inventory (all of a stack by default) to an open merchant."""
         cmd = pb.Command()
