@@ -222,8 +222,10 @@ function resize() {
 const toScreen = (mx, my) => [(mx - view.cx) * view.scale + canvas.clientWidth / 2, (my - view.cy) * view.scale + canvas.clientHeight / 2];
 const toMap = (sx, sy) => [(sx - canvas.clientWidth / 2) / view.scale + view.cx, (sy - canvas.clientHeight / 2) / view.scale + view.cy];
 
+let needFit = false;  // a fit asked for while the map's tab was hidden (no size to fit to): done when it's shown
 function fit() {
   if (!map || !map.layers.length) return;
+  if (!canvas.clientWidth || !canvas.clientHeight) { needFit = true; return; }
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const layer of map.layers) for (const l of layer.lines) {
     x0 = Math.min(x0, l[0], l[3]); x1 = Math.max(x1, l[0], l[3]);
@@ -487,7 +489,16 @@ function appendChat(entries) {
 function setView(v) {
   document.body.dataset.view = v;
   for (const b of document.querySelectorAll("#viewbar .tab")) b.classList.toggle("on", b.dataset.view === v);
-  if (v === "map") requestAnimationFrame(() => { resize(); draw(); });
+  if (v === "map") requestAnimationFrame(() => {
+    resize();
+    if (needFit || !(view.scale > 0) || !isFinite(view.scale)) {  // (loaded, or zoned, while the log was showing)
+      needFit = false;
+      const following = $("follow").checked;
+      fit();
+      $("follow").checked = following;
+    }
+    draw();
+  });
   else { const w = $("chatwin"); w.scrollTop = w.scrollHeight; const a = $("entries"); a.scrollTop = a.scrollHeight; }
   save();
 }
