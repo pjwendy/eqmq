@@ -34,18 +34,18 @@
   }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
     font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  canvas { position: absolute; left: 0; right: 0; bottom: 0; top: 34px; width: 100%; height: calc(100% - 34px); cursor: grab; touch-action: none; }
   canvas.drag { cursor: grabbing; }
   .panel { position: absolute; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
     padding: 8px 10px; box-shadow: 0 2px 8px #0002; }
-  #controls { top: 12px; left: 12px; max-width: calc(100% - 48px); display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+  #controls { top: 46px; left: 12px; max-width: calc(100% - 48px); display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
   #controls label { white-space: nowrap; }
   #controls input[type=text] { width: 120px; }
   #controls input[type=number] { width: 56px; }
   button { font: inherit; padding: 2px 8px; }
   #status { bottom: 12px; left: 12px; right: 12px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
   #status b { font-weight: 600; }
-  #side { position: absolute; top: 12px; right: 12px; bottom: 56px; width: 270px; display: flex;
+  #side { position: absolute; top: 46px; right: 12px; bottom: 56px; width: 270px; display: flex;
     flex-direction: column; gap: 8px; pointer-events: none; }
   #side .panel { position: static; pointer-events: auto; }
   #legend { display: flex; flex-wrap: wrap; gap: 2px 10px; }
@@ -64,8 +64,7 @@
   .xprow .bar { flex: 1; margin: 0; height: 4px; }
   .xprow span { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
   .xprow b { font-weight: 600; min-width: 18px; }
-  #log { flex: 1; min-height: 90px; display: flex; flex-direction: column; }
-  #entries { flex: 1; overflow-y: auto; font-size: 12px; line-height: 1.35; }
+  #entries { flex: 1; overflow-y: auto; font-size: 12px; line-height: 1.35; min-height: 0; }
   #entries div { padding: 2px 0; border-bottom: 1px solid var(--track); overflow-wrap: anywhere; }
   #entries .t { color: var(--muted); margin-right: 4px; font-variant-numeric: tabular-nums; }
   #entries .kill { color: var(--kill); }
@@ -90,6 +89,30 @@
   #tip { position: absolute; pointer-events: none; display: none; white-space: nowrap; }
   #error { top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; max-width: 80%; }
   .muted { color: var(--muted); }
+  /* the tabs: the map, or the log and chat, under a bar of their own (the toolbar extras go in the bar) */
+  #viewbar { position: absolute; top: 0; left: 0; right: 0; height: 34px; display: flex; align-items: center; gap: 6px;
+    padding: 0 8px; background: var(--panel); border-bottom: 1px solid var(--border); z-index: 5; overflow-x: auto; white-space: nowrap; }
+  #viewbar .tab { padding: 4px 14px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; }
+  #viewbar .tab.on { background: var(--text); color: var(--bg); font-weight: 600; }
+  #viewbar .where { color: var(--muted); margin: 0 8px 0 4px; }
+  #logview { display: none; position: absolute; top: 34px; left: 0; right: 0; bottom: 0; gap: 8px; padding: 8px; box-sizing: border-box; }
+  body[data-view="log"] #logview { display: flex; }
+  body[data-view="log"] canvas, body[data-view="log"] #controls, body[data-view="log"] #side, body[data-view="log"] #status,
+  body[data-view="log"] #tip { display: none !important; }
+  .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  #chatbox { flex: 3; } #actbox { flex: 1.2; min-width: 240px; }
+  .panehead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 6px; }
+  .panehead h3 { margin: 0; }
+  .panehead label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  /* the chat window, as the client's: dark, every line of game text in its own colour */
+  #chatwin { flex: 1; min-height: 0; overflow-y: auto; background: #0d0d10; color: #e6e6e6; border-radius: 6px; padding: 6px 8px;
+    font: 12.5px/1.4 Verdana, "DejaVu Sans", sans-serif; }
+  #chatwin div { overflow-wrap: anywhere; }
+  #chatwin .t { color: #6b6b73; margin-right: 6px; font-variant-numeric: tabular-nums; display: none; }
+  #chatwin.times .t { display: inline; }
+  #chatwin.hide-chat .c-chat, #chatwin.hide-combat .c-combat, #chatwin.hide-spells .c-spells, #chatwin.hide-loot .c-loot,
+  #chatwin.hide-other .c-other { display: none; }
+  #chatwin .big { font-weight: 700; }
   #sidebtn, #tabs { display: none; }
   #tabs button { flex: 1; }
   #tabs button.on { font-weight: 600; }
@@ -103,12 +126,14 @@
     #side #tabs { display: flex; gap: 6px; flex: none; padding: 6px; }
     #side > .panel:not(#tabs) { display: none; }
     body[data-tab="group"] #side > #group, body[data-tab="plan"] #side > #plan { display: block !important; flex: 1; overflow-y: auto; }
-    body[data-tab="log"] #side > #log { display: flex !important; flex: 1; min-height: 0; }
-    #controls { top: 8px; left: 8px; max-width: calc(100% - 16px); }
+    body[data-view="log"] #logview { flex-direction: column; }
+    #chatbox { flex: 2; } #actbox { flex: 1; min-width: 0; }
+    #controls { top: 42px; left: 8px; max-width: calc(100% - 16px); }
   }
 </style>
 </head>
 <body>
+<div id="viewbar"><button class="tab on" data-view="map">Map</button><button class="tab" data-view="log">Log &amp; chat</button><span class="where" id="where"></span><!--eqmq:controls--></div>
 <canvas id="map"></canvas>
 <div id="controls" class="panel">
   <button id="fit" title="Fit the whole zone">Fit</button>
@@ -121,10 +146,9 @@
   <label title="The server's navmesh: where characters can walk. The biggest piece is green; each other colour is a separate piece (island) a character can't walk to from the rest. Dashed lines are off-mesh links."><input type="checkbox" id="navmesh"> Navmesh<span id="navinfo" class="muted"></span></label>
   <label title="Fade map and spawns far above or below the bot"><input type="checkbox" id="zfilter"> Height ±<input type="number" id="zrange" value="40" min="5" step="5"></label>
   <input type="text" id="filter" placeholder="Find spawn…">
-  <!--eqmq:controls-->
 </div>
 <div id="side">
-  <div id="tabs" class="panel"><button data-tab="group">Group</button><button data-tab="plan">Plan</button><button data-tab="log">Log</button></div>
+  <div id="tabs" class="panel"><button data-tab="group">Group</button><button data-tab="plan">Plan</button></div>
   <div id="legend" class="panel">
     <span style="--c: var(--me)">You</span><span class="sq" style="--c: var(--pc)">Player</span><span class="sq" style="--c: var(--bot)">Bot</span>
     <span style="--c: var(--npc)">NPC</span><span style="--c: var(--pet)">Pet</span><span style="--c: var(--corpse)">Corpse</span>
@@ -132,7 +156,16 @@
   </div>
   <div id="group" class="panel"><h3>Group</h3><div id="members"><span class="muted">&mdash;</span></div></div>
   <div id="plan" class="panel" hidden><h3>Plan</h3><dl id="planrows"></dl></div>
-  <div id="log" class="panel"><h3>Log</h3><div id="entries"></div></div>
+</div>
+<div id="logview">
+  <div id="chatbox" class="pane">
+    <div class="panehead"><h3>Chat</h3>
+      <label><input type="checkbox" data-f="chat" checked> Chat</label><label><input type="checkbox" data-f="combat" checked> Combat</label>
+      <label><input type="checkbox" data-f="spells" checked> Spells</label><label><input type="checkbox" data-f="loot" checked> Loot &amp; coin</label>
+      <label><input type="checkbox" data-f="other" checked> Other</label><label><input type="checkbox" id="chattimes"> Times</label></div>
+    <div id="chatwin"></div>
+  </div>
+  <div id="actbox" class="pane"><div class="panehead"><h3>Log</h3></div><div id="entries"></div></div>
 </div>
 <div id="status" class="panel"><span class="muted">Connecting…</span></div>
 <div id="tip" class="panel"></div>
@@ -158,7 +191,8 @@ function load() { try { return JSON.parse(localStorage.getItem("eqmq-viewer") ||
 function save() {
   try { localStorage.setItem("eqmq-viewer", JSON.stringify({
     labels: $("labels").checked, names: $("names").checked, zfilter: $("zfilter").checked, zrange: $("zrange").value,
-    follow: $("follow").checked, navmesh: $("navmesh").checked, concol: $("concol").checked })); } catch {}
+    follow: $("follow").checked, navmesh: $("navmesh").checked, concol: $("concol").checked,
+    view: document.body.dataset.view, chatf: chatFilters(), times: $("chattimes").checked })); } catch {}
 }
 for (const k of ["labels", "names", "zfilter", "follow", "navmesh", "concol"]) if (k in prefs) $(k).checked = prefs[k];
 
@@ -409,6 +443,65 @@ function renderGroup(group) {
     `</div>`).join("") || '<span class="muted">&mdash;</span>';
 }
 
+// the chat window: the server's message types are the client's colour numbers; the user colours (256 on) are the
+// defaults of its chat settings. A line's group (for the filters): chat, combat, spells, loot, other.
+const CHAT_COLOUR = {
+  0: "#ffffff", 1: "#9a9aa3", 2: "#4cd06a", 3: "#4f9bff", 4: "#6fd3ff", 5: "#e66bff", 6: "#9a9aa3", 7: "#c8c8d0", 10: "#6fd3ff",
+  12: "#6b6b73", 13: "#ff5b4b", 14: "#9cff5a", 15: "#ffd93b", 16: "#4f7dff", 17: "#7f8cff", 18: "#4fe6e6", 20: "#9a9aa3",
+  256: "#f2f2f2", 257: "#4fe6e6", 258: "#6fa8ff", 259: "#4cd06a", 260: "#9cff5a", 261: "#ffa94d", 262: "#ff6b6b", 263: "#ff9ff3",
+  264: "#6fd3ff", 265: "#ffffff", 266: "#ff5b4b", 267: "#a0a0a8", 268: "#a0a0a8", 269: "#ffd93b", 270: "#ffd93b", 271: "#ffd93b",
+  273: "#e6e6e6", 275: "#cfcfd6", 276: "#cfcfd6", 277: "#ff5b4b", 278: "#ffa94d", 279: "#b0b0b8", 280: "#80808a", 281: "#e6e6e6",
+  282: "#ff5b4b", 283: "#f2c94c", 284: "#8fb4c8", 285: "#ffd93b", 286: "#f6c25b", 287: "#e6e6e6", 288: "#8fb4c8", 289: "#ff7b6e",
+  301: "#ffd93b", 302: "#ffd93b", 303: "#ffa94d", 304: "#ff6b5b", 305: "#ff6b5b", 306: "#ff6b5b", 307: "#f2f2f2", 308: "#4fe6e6",
+};
+function chatGroup(k) {
+  if ((k >= 256 && k <= 263) || (k >= 290 && k <= 300) || k === 307 || k === 308) return "chat";
+  if ([265, 266, 267, 268, 277, 278, 279, 280, 283, 301, 304, 305, 306].includes(k)) return "combat";
+  if ([264, 284, 288, 289, 302].includes(k)) return "spells";
+  if ([275, 276, 285, 286].includes(k)) return "loot";
+  return "other";
+}
+const chatFilters = () => Object.fromEntries([...document.querySelectorAll("#chatbox [data-f]")].map(b => [b.dataset.f, b.checked]));
+function applyChatFilters() {
+  const win = $("chatwin"), atBottom = win.scrollTop + win.clientHeight >= win.scrollHeight - 30;
+  for (const [f, on] of Object.entries(chatFilters())) win.classList.toggle("hide-" + f, !on);
+  win.classList.toggle("times", $("chattimes").checked);
+  if (atBottom) win.scrollTop = win.scrollHeight;
+}
+let lastChat = 0;
+function appendChat(entries) {
+  if (!entries || !entries.length) return;
+  const win = $("chatwin"), atBottom = win.scrollTop + win.clientHeight >= win.scrollHeight - 30;
+  for (const e of entries) {
+    if (e.id <= lastChat) continue;
+    lastChat = e.id;
+    const div = document.createElement("div");
+    div.className = "c-" + chatGroup(e.k) + ([277, 301, 302].includes(e.k) ? " big" : "");
+    div.style.color = CHAT_COLOUR[e.k] || "#e6e6e6";
+    div.innerHTML = `<span class="t">${esc(e.t)}</span>${esc(e.x)}`;
+    win.appendChild(div);
+  }
+  while (win.children.length > 1500) win.removeChild(win.firstChild);
+  if (atBottom) win.scrollTop = win.scrollHeight;
+}
+function setView(v) {
+  document.body.dataset.view = v;
+  for (const b of document.querySelectorAll("#viewbar .tab")) b.classList.toggle("on", b.dataset.view === v);
+  if (v === "map") requestAnimationFrame(() => { resize(); draw(); });
+  else { const w = $("chatwin"); w.scrollTop = w.scrollHeight; const a = $("entries"); a.scrollTop = a.scrollHeight; }
+  save();
+}
+for (const b of document.querySelectorAll("#viewbar .tab")) b.onclick = () => setView(b.dataset.view);
+for (const b of document.querySelectorAll("#chatbox [data-f], #chattimes")) b.onchange = () => { applyChatFilters(); save(); };
+if (prefs.chatf) for (const b of document.querySelectorAll("#chatbox [data-f]")) if (b.dataset.f in prefs.chatf) b.checked = prefs.chatf[b.dataset.f];
+$("chattimes").checked = !!prefs.times;
+applyChatFilters();
+{ // (the tab it was left on)
+  const v = prefs.view === "log" ? "log" : "map";
+  document.body.dataset.view = v;
+  for (const b of document.querySelectorAll("#viewbar .tab")) b.classList.toggle("on", b.dataset.view === v);
+}
+
 let lastLog = 0;
 function appendLog(entries) {
   if (!entries || !entries.length) return;
@@ -431,7 +524,8 @@ function connect() {
     state = JSON.parse(ev.data);
     if (state.connected && state.zone !== zone) { zone = state.zone; await loadMap(); loadNav(); }
     if (state.connected && $("follow").checked) { view.cx = -state.me.x; view.cy = -state.me.y; }
-    updateStatus(); draw(); showTip(); renderGroup(state.group); renderPlan(state.plan); appendLog(state.log);
+    updateStatus(); draw(); showTip(); renderGroup(state.group); renderPlan(state.plan); appendLog(state.log); appendChat(state.chat);
+    if (state.connected) $("where").textContent = `${state.me.name} · ${state.zone_name}`;
     document.dispatchEvent(new CustomEvent("eqmq-state", { detail: state }));  // for plugins' controls
   };
   es.onerror = () => { $("status").innerHTML = '<span class="muted">Viewer disconnected, retrying…</span>'; };

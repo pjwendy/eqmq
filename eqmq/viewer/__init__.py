@@ -134,6 +134,8 @@ class MapViewer(MQPlugin):
         self._page = page.encode("utf-8")
         self._log: collections.deque = collections.deque(maxlen=500)
         self._log_id = 0
+        self._chat_id = 0
+        self._chatlog: collections.deque = collections.deque(maxlen=1500)  # the chat window: every line of game text, with its colour
         self._chat_line = ""
         # fn() -> {"rows": [[label, text], ...]} or None: what the shown character is doing and why,
         # in its own panel (an AI layer sets it; the SDK has no plans of its own)
@@ -144,9 +146,24 @@ class MapViewer(MQPlugin):
         self._log_id += 1
         self._log.append({"id": self._log_id, "t": time.strftime("%H:%M"), "kind": kind, "text": str(text)[:300]})
 
+    CHANNEL_TYPES = {"SAY": 256, "TELL": 257, "GROUP": 258, "GUILD": 259, "OOC": 260, "AUCTION": 261, "SHOUT": 262, "RAID": 258}
+
+    def _chat_add(self, kind: int, line: str) -> None:
+        """A line for the page's chat window (kind: the server's message type, which says its colour: events.Message.Type)."""
+        self._chat_id += 1
+        self._chatlog.append({"id": self._chat_id, "t": time.strftime("%H:%M:%S"), "k": int(kind), "x": str(line)[:400]})
+
+    def _on_message(self, msg) -> None:
+        if msg.Line:
+            self._chat_add(msg.Type, msg.Line)
+
+    def _on_skill(self, up) -> None:
+        self._chat_add(270, up.Line)
+
     def _on_chat(self, chat) -> None:
         self._chat_line = chat.Line  # the "line" handler gets it next: don't log it twice
         self.note(chat.Line, "chat")
+        self._chat_add(self.CHANNEL_TYPES.get(str(chat.Channel).upper(), 273), chat.Line)
 
     def _on_zone(self, change) -> None:
         """Zone lines, ports, gates, deaths and #zone all come through here."""
@@ -178,6 +195,8 @@ class MapViewer(MQPlugin):
 
     async def on_load(self) -> None:
         self.bot.on("chat")(self._on_chat)
+        self.bot.on("message")(self._on_message)
+        self.bot.on("skill")(self._on_skill)
         self.bot.on("line")(self._on_line)
         self.bot.on("zone")(self._on_zone)
         self._server = await asyncio.start_server(self._handle, self.host, self.port)
@@ -186,6 +205,8 @@ class MapViewer(MQPlugin):
 
     async def on_clean(self) -> None:
         self.bot.off("chat", self._on_chat)
+        self.bot.off("message", self._on_message)
+        self.bot.off("skill", self._on_skill)
         self.bot.off("line", self._on_line)
         self.bot.off("zone", self._on_zone)
         if self._server:
@@ -295,12 +316,15 @@ class MapViewer(MQPlugin):
     async def _events(self, writer) -> None:
         writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\n"
                      b"Connection: keep-alive\r\n\r\n")
-        sent = 0
+        sent = sent_chat = 0
         while self.bot.connected:
             state = self.snapshot()
             state["log"] = [e for e in self._log if e["id"] > sent]
             if state["log"]:
                 sent = state["log"][-1]["id"]
+            state["chat"] = [e for e in self._chatlog if e["id"] > sent_chat]
+            if state["chat"]:
+                sent_chat = state["chat"][-1]["id"]
             writer.write(f"data: {json.dumps(state, separators=(',', ':'))}\n\n".encode())
             await writer.drain()
             await asyncio.sleep(UPDATE_INTERVAL)
