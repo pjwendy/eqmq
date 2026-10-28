@@ -97,6 +97,7 @@ mob died shows up in state and events, as it would on a player's screen.
 | `open_merchant(npc)`, `buy(npc, slot, qty)`, `sell(npc, item, qty)`, `close_merchant(npc)` | Shopping. `open_merchant` returns the merchant's list. |
 | `send_parcel(npc, item, to, note)`, `retrieve_parcel(npc, parcel)` | Parcels, at an open parcel merchant: `open_merchant` returns `ParcelMerchant` and the `Parcels` waiting for you (`Parcel`: `Name`, `Quantity`, `From`, `Note`). Not attuned items, nor no-drop ones unless the server lets no-drop be traded (`World:FVNoDropFlag`); one parcel every 30 seconds. |
 | `move_item(from_slot, to_slot)` | Move items between inventory, bags, worn slots and the bank. |
+| `click_object(object_id)`, `combine(container_slot)`, `close_object()` | Tradeskills. `click_object` opens a world container (an oven, forge, loom, brew barrel, kiln...) by its id in the zone's object table, within reach; fill it with `move_item(slot, WORLD_SLOT + n)`; `combine()` (default `WORLD_CONTAINER`) is the Combine button, or pass an inventory bag's slot for a portable container. The product and any skill-up come as items and text. Products land on the cursor (one already there queues the next behind it: empty it between combines). |
 | `ability(name)` | A combat ability: kick, bash, backstab, taunt, frenzy, the monk strikes; sneak, hide, feign death (`ABILITIES`). |
 | `discipline(spell_id)` | A discipline you know (`Me.Disciplines`). |
 | `pet(command)`, `Pet()` | Command your pet (`"attack"`, `"back off"`, `"follow"`, `"taunt on"`, ... `PET_COMMANDS`); your pet. |
