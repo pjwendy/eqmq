@@ -11,13 +11,13 @@ from .network import INetworkClient, ProtobufNetworkClient
 from .plugin import MQPlugin, load_plugins
 from .proto.headless_pb2 import (CHAT_AUCTION, CHAT_GROUP, CHAT_GUILD, CHAT_OOC, CHAT_RAID, CHAT_SAY,
                                  CHAT_SHOUT, CHAT_TELL)
-from .tlo import (BAG_SLOTS_BEGIN, BANK_BAGS_BEGIN, BANK_SLOTS, CURSOR_SLOT, GENERAL_SLOTS, WORN_SLOTS, Buff, BookSpell, Gem, Group,
+from .tlo import (BAG_SLOTS_BEGIN, BANK_BAGS_BEGIN, BANK_SLOTS, CURSOR_SLOT, WORLD_CONTAINER, WORLD_SLOT, GENERAL_SLOTS, WORN_SLOTS, Buff, BookSpell, Gem, Group,
                   GroupMember, Item, Me, Spawn, Zone, ZoneExit, BotGear)
 
 __all__ = [
     "ABILITIES", "PET_COMMANDS", "Bot", "Refused", "CommandResult", "MoveResult", "NavNote", "ZoneChange", "Consider", "LootResult", "Death", "SkillUp",
     "Gem", "Buff", "BookSpell", "Item", "ZoneExit", "Merchant", "Parcel", "PackItem", "BotGear",
-    "WORN_SLOTS", "GENERAL_SLOTS", "CURSOR_SLOT", "BAG_SLOTS_BEGIN", "BANK_SLOTS", "BANK_BAGS_BEGIN", "connect", "INetworkClient", "ProtobufNetworkClient",
+    "WORN_SLOTS", "GENERAL_SLOTS", "CURSOR_SLOT", "WORLD_CONTAINER", "WORLD_SLOT", "BAG_SLOTS_BEGIN", "BANK_SLOTS", "BANK_BAGS_BEGIN", "connect", "INetworkClient", "ProtobufNetworkClient",
     "Me", "Spawn", "Zone", "Group", "GroupMember", "Chat", "Message", "SDK_VERSION", "MQPlugin", "load_plugins",
     "CHAT_SAY", "CHAT_TELL", "CHAT_GROUP", "CHAT_GUILD", "CHAT_OOC", "CHAT_SHOUT", "CHAT_AUCTION", "CHAT_RAID",
 ]
