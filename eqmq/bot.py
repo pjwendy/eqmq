@@ -15,7 +15,7 @@ from .plugin import MQPlugin, load_plugins
 from .proto import headless_pb2 as pb
 from .search import SpawnSearch
 from .state import StateMirror
-from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Spawn, Zone
+from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Spawn, Zone, WORLD_CONTAINER, WORLD_SLOT
 
 SDK_VERSION = "eqmq/0.16"
 COMMAND_TIMEOUT = 10.0
@@ -499,6 +499,28 @@ class Bot:
         while change.Status == "ARRIVED" and change.Zone == start and loop.time() < deadline:
             change = await self.wait_zoned(max(1.0, deadline - loop.time()))
         return change
+
+    async def click_object(self, object_id: int) -> CommandResult:
+        """Open a world container (a forge, oven, kiln, brew barrel, loom...) by its id in the zone's object table, as a click on
+        it does: stand beside it first (the server checks). Put what you combine into its slots (WORLD_SLOT + 0...: move_item),
+        then combine(); close_object() when done."""
+        cmd = pb.Command()
+        cmd.click_object.object_id = object_id
+        return await self.command(cmd)
+
+    async def close_object(self) -> CommandResult:
+        """Close the world container opened (anything left in it comes back to the inventory)."""
+        cmd = pb.Command()
+        cmd.close_object.SetInParent()
+        return await self.command(cmd)
+
+    async def combine(self, container_slot: int = WORLD_CONTAINER) -> CommandResult:
+        """The Combine button: make what the recipe says from what's in a container (WORLD_CONTAINER: the world object opened with
+        click_object; or an inventory bag's slot, for a portable one). The server rolls the skill: the product, or the loss of
+        some components, land in the inventory and the messages in chat (recent_messages)."""
+        cmd = pb.Command()
+        cmd.combine.container_slot = container_slot
+        return await self.command(cmd)
 
     async def aa_exp(self, percent: int) -> CommandResult:
         """The share of experience going to AA, as the client's AA window slider (0 off, 100: no more

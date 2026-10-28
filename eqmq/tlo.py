@@ -64,6 +64,8 @@ WORN_SLOTS = {"charm": 0, "ear1": 1, "head": 2, "face": 3, "ear2": 4, "neck": 5,
               "ammo": 22}
 GENERAL_SLOTS = tuple(range(23, 33))  # the ten top-level bag slots
 CURSOR_SLOT = 33
+WORLD_SLOT = 4000        # the first slot of a world container (a forge, an oven): its items go to WORLD_SLOT + 0 ...
+WORLD_CONTAINER = 1000   # combine()'s container_slot for the world container opened
 BAG_SLOTS_BEGIN = 4010                 # general bag contents: 4010 + (general slot - 23) * 200 + index
 BANK_SLOTS = tuple(range(2000, 2024))  # the bank's 24 slots (use them next to a banker)
 BANK_BAGS_BEGIN = 6210                 # bank bag contents: 6210 + (bank slot - 2000) * 200 + index
