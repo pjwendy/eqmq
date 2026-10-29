@@ -219,7 +219,8 @@ class MapViewer(MQPlugin):
         bot = self.bot
         me, zone = bot.Me, bot.Zone
         if not me or not zone:
-            return {"connected": False}
+            # (logged out, or logging in: the connection is up but the character's own state has not arrived)
+            return {"connected": False, "phase": "in" if bot.connected else "out"}
         group = []
         members = bot.Group.All if bot.Group else ()
         names = [m.Name for m in members] or [me.Name]
@@ -246,6 +247,8 @@ class MapViewer(MQPlugin):
             except Exception:
                 log.debug("plan failed", exc_info=True)
         return {
+            "phase": "out" if not bot.connected else "zoning" if getattr(self, "_zoning_to", None) else "world",  # (the 3D view's screens: logged out, zoning, in the world)
+            "zoning_to": getattr(self, "_zoning_to", None) or "",
             "group": group,
             "plan": plan,
             "connected": bot.connected,
@@ -319,7 +322,7 @@ class MapViewer(MQPlugin):
                      b"Access-Control-Allow-Origin: *\r\n"  # (another page on this machine, the 3D view, reads the stream)
                      b"Connection: keep-alive\r\n\r\n")
         sent = sent_chat = 0
-        while self.bot.connected:
+        while True:  # (it goes on while the character is logged out and in again: the 3D view says so, and the stream ends only when the page does: a write fails)
             state = self.snapshot()
             state["log"] = [e for e in self._log if e["id"] > sent]
             if state["log"]:
