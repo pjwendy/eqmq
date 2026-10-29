@@ -445,7 +445,7 @@ class Bot:
         round the mobs that would aggro you where there's a way (zone_to always does).
         """
         me = self._state.me
-        if me and me.Sitting:  # (the mover stops a sitting character at once: "STOPPED", every time)
+        if me and me.sitting:  # (the mover stops a sitting character at once: "STOPPED", every time)
             await self.stand()
         cmd = pb.Command()
         cmd.move_to.x, cmd.move_to.y = x, y
