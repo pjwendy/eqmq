@@ -568,6 +568,12 @@ class Bot:
             return None
         return plan[0] if plan else None
 
+    async def route_path(self, x: float, y: float, z: float | None = None, timeout: float = 5) -> list[tuple[float, float, float]] | None:
+        """The points of the walk to (in-game x, y, z) along the navmesh, in order (at most about 120), without walking; None if there's no way there."""
+        self._plan_path = []
+        length = await self.route_length(x, y, z, timeout)
+        return list(self._plan_path) if length is not None else None
+
     async def zone_plan(self, short_name: str, number: int = 0, timeout: float = 5) -> tuple[float, float] | None:
         """The walk zone_to would take to this zone's zone line for a neighbouring zone, without walking:
         (its length, how much of it is a swim), or None if there's no way there. A walk under way carries on."""
@@ -1317,6 +1323,7 @@ class Bot:
         if kind == "move" and event.move.plan_only:
             m = event.move
             plan = (m.route_length, m.swim_length) if m.status == pb.MOVE_ARRIVED else None
+            self._plan_path = [(p.x, p.y, p.z) for p in m.path]  # (route_path reads it: the walk's points)
             waiters, self._plan_waiters = self._plan_waiters, []
             for fut in waiters:
                 if not fut.done():
