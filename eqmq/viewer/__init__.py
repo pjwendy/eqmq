@@ -252,10 +252,11 @@ class MapViewer(MQPlugin):
             "zone": zone.ShortName,
             "zone_name": zone.Name,
             "me": {"id": me.ID, "name": me.Name, "level": me.Level, "x": me.X, "y": me.Y, "z": me.Z, "heading": me.Heading,
-                   "target": me.TargetID, "hp": me.PctHPs, "hour": me.GameHour, "race": me.RaceID, "sex": me.Gender},
+                   "target": me.TargetID, "hp": me.PctHPs, "hour": me.GameHour, "race": me.RaceID, "sex": me.Gender,
+                   "mana": me.PctMana, "cid": me.ClassID, "buffs": [[b.Name, b.Ticks] for b in me.Buffs][:40]},
             "spawns": [
                 {"id": s.ID, "n": s.Name, "t": s.Type, "l": s.Level, "x": round(s.X, 1), "y": round(s.Y, 1),
-                 "z": round(s.Z, 1), "h": round(s.Heading), "hp": s.PctHPs, "ai": s.Headless, "r": s.RaceID, "g": s.Gender}
+                 "z": round(s.Z, 1), "h": round(s.Heading), "hp": s.PctHPs, "ai": s.Headless, "r": s.RaceID, "g": s.Gender, "m": s.PctMana, "tg": s.TargetID}
                 for s in bot.Spawns()
             ],
         }
