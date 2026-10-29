@@ -256,7 +256,7 @@ class MapViewer(MQPlugin):
                    "mana": me.PctMana, "cid": me.ClassID, "buffs": [[b.Name, b.Ticks, b.ID] for b in me.Buffs][:40]},
             "spawns": [
                 {"id": s.ID, "n": s.Name, "t": s.Type, "l": s.Level, "x": round(s.X, 1), "y": round(s.Y, 1),
-                 "z": round(s.Z, 1), "h": round(s.Heading), "hp": s.PctHPs, "ai": s.Headless, "r": s.RaceID, "g": s.Gender, "m": s.PctMana, "tg": s.TargetID}
+                 "z": round(s.Z, 1), "h": round(s.Heading), "hp": s.PctHPs, "ai": s.Headless, "r": s.RaceID, "g": s.Gender, "m": s.PctMana, "tg": s.TargetID, "w1": s.Primary, "w2": s.Secondary}
                 for s in bot.Spawns()
             ],
         }

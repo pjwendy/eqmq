@@ -176,6 +176,8 @@ class Spawn:
     TargetID: int = 0  # who it has targeted; for an NPC in combat, who it's hitting
     PctMana: int = 0   # 0 for spawns without mana
     Gender: int = 0    # 0 male, 1 female, 2 neutral (the model to draw)
+    Primary: int = 0   # the model of what it holds in its primary hand (IT<n>), 0 if none
+    Secondary: int = 0
     _me_x: float = 0.0
     _me_y: float = 0.0
     _me_z: float = 0.0
@@ -205,7 +207,7 @@ class Spawn:
         return Spawn(
             ID=s.id, Name=s.name, Type=type_name, Level=s.level, ClassID=s.class_id,
             RaceID=s.race_id, X=s.x, Y=s.y, Z=s.z, Heading=s.heading, PctHPs=s.hp_pct,
-            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, _me_x=me_x, _me_y=me_y, _me_z=me_z,
+            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, _me_x=me_x, _me_y=me_y, _me_z=me_z,
         )
 
 
