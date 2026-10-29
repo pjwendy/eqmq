@@ -227,7 +227,7 @@ class MapViewer(MQPlugin):
         for name in names:
             m = next((g for g in members if g.Name == name), None)
             if name == me.Name:
-                group.append({"name": me.Name, "cls": CLASS_SHORT.get(me.ClassID, "?"), "level": me.Level,
+                group.append({"id": me.ID, "name": me.Name, "cls": CLASS_SHORT.get(me.ClassID, "?"), "level": me.Level,
                               "hp": me.PctHPs, "mana": me.PctMana, "has_mana": me.MaxMana > 0,
                               "leader": bool(m and m.Leader) or not members, "here": True,
                               "exp": round(me.ExpPct, 1), "aa": round(me.AAExpPct, 1), "aa_points": me.AAPoints,
@@ -235,7 +235,7 @@ class MapViewer(MQPlugin):
                               or me.AASplit > 0})
                 continue
             s = spawns.get(m.ID) if m and m.ID else None
-            group.append({"name": name, "cls": CLASS_SHORT.get(s.ClassID, "?") if s else "?", "level": s.Level if s else 0,
+            group.append({"id": s.ID if s else 0, "name": name, "cls": CLASS_SHORT.get(s.ClassID, "?") if s else "?", "level": s.Level if s else 0,
                           "hp": s.PctHPs if s else 0, "mana": s.PctMana if s else 0,
                           "has_mana": bool(s and s.ClassID not in NO_MANA), "leader": bool(m and m.Leader),
                           "here": s is not None})
@@ -252,10 +252,10 @@ class MapViewer(MQPlugin):
             "zone": zone.ShortName,
             "zone_name": zone.Name,
             "me": {"id": me.ID, "name": me.Name, "level": me.Level, "x": me.X, "y": me.Y, "z": me.Z, "heading": me.Heading,
-                   "target": me.TargetID, "hp": me.PctHPs, "hour": me.GameHour},
+                   "target": me.TargetID, "hp": me.PctHPs, "hour": me.GameHour, "race": me.RaceID, "sex": me.Gender},
             "spawns": [
                 {"id": s.ID, "n": s.Name, "t": s.Type, "l": s.Level, "x": round(s.X, 1), "y": round(s.Y, 1),
-                 "z": round(s.Z, 1), "h": round(s.Heading), "hp": s.PctHPs, "ai": s.Headless}
+                 "z": round(s.Z, 1), "h": round(s.Heading), "hp": s.PctHPs, "ai": s.Headless, "r": s.RaceID, "g": s.Gender}
                 for s in bot.Spawns()
             ],
         }
@@ -315,6 +315,7 @@ class MapViewer(MQPlugin):
 
     async def _events(self, writer) -> None:
         writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\n"
+                     b"Access-Control-Allow-Origin: *\r\n"  # (another page on this machine, the 3D view, reads the stream)
                      b"Connection: keep-alive\r\n\r\n")
         sent = sent_chat = 0
         while self.bot.connected:

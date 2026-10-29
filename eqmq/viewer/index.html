@@ -133,7 +133,7 @@
 </style>
 </head>
 <body>
-<div id="viewbar"><button class="tab on" data-view="map">Map</button><button class="tab" data-view="log">Log &amp; chat</button><span class="where" id="where"></span><!--eqmq:controls--></div>
+<div id="viewbar"><button class="tab on" data-view="map">Map</button><button class="tab" data-view="log">Log &amp; chat</button><button class="tab" id="to3d" title="Watch this character in 3D, as the game draws it (the guild dashboard's player, fed by this map's stream)" hidden>3D</button><span class="where" id="where"></span><!--eqmq:controls--></div>
 <canvas id="map"></canvas>
 <div id="controls" class="panel">
   <button id="fit" title="Fit the whole zone">Fit</button>
@@ -537,6 +537,11 @@ function connect() {
     if (state.connected && $("follow").checked) { view.cx = -state.me.x; view.cy = -state.me.y; }
     updateStatus(); draw(); showTip(); renderGroup(state.group); renderPlan(state.plan); appendLog(state.log); appendChat(state.chat);
     if (state.connected) $("where").textContent = `${state.me.name} · ${state.zone_name}`;
+    if (state.connected) {
+      const b3 = $("to3d"), proxied = /^\/map\/\d+\//.test(location.pathname), ev = proxied ? location.pathname + "events" : location.origin + "/events";
+      b3.hidden = false;
+      b3.onclick = () => { location.href = (proxied ? "" : `${location.protocol}//${location.hostname}:8766`) + `/live?3d&leader=${encodeURIComponent(state.me.name)}&events=${encodeURIComponent(ev)}`; };
+    }
     document.dispatchEvent(new CustomEvent("eqmq-state", { detail: state }));  // for plugins' controls
   };
   es.onerror = () => { $("status").innerHTML = '<span class="muted">Viewer disconnected, retrying…</span>'; };
