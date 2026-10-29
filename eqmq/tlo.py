@@ -175,6 +175,7 @@ class Spawn:
     Headless: bool
     TargetID: int = 0  # who it has targeted; for an NPC in combat, who it's hitting
     PctMana: int = 0   # 0 for spawns without mana
+    Gender: int = 0    # 0 male, 1 female, 2 neutral (the model to draw)
     _me_x: float = 0.0
     _me_y: float = 0.0
     _me_z: float = 0.0
@@ -204,7 +205,7 @@ class Spawn:
         return Spawn(
             ID=s.id, Name=s.name, Type=type_name, Level=s.level, ClassID=s.class_id,
             RaceID=s.race_id, X=s.x, Y=s.y, Z=s.z, Heading=s.heading, PctHPs=s.hp_pct,
-            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, _me_x=me_x, _me_y=me_y, _me_z=me_z,
+            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, _me_x=me_x, _me_y=me_y, _me_z=me_z,
         )
 
 
@@ -248,6 +249,7 @@ class Me:
     GameHour: int = 0       # the zone's EQ hour, 1-24 (0: an older server); an EQ hour is 3 real minutes
     Air: int = 0            # seconds of air left under water (full whenever you can breathe; at none you drown)
     MaxAir: int = 0         # seconds of air at most (Stamina, Lung Capacity)
+    Gender: int = 0         # 0 male, 1 female, 2 neutral
 
     @property
     def Night(self) -> bool:
@@ -306,7 +308,7 @@ class Me:
     @staticmethod
     def from_pb(m: pb.Self) -> "Me":
         return Me(
-            ID=m.spawn_id, Name=m.name, Level=m.level, ClassID=m.class_id, RaceID=m.race_id,
+            ID=m.spawn_id, Name=m.name, Level=m.level, ClassID=m.class_id, RaceID=m.race_id, Gender=m.gender,
             CurrentHPs=m.hp, MaxHPs=m.max_hp, CurrentMana=m.mana, MaxMana=m.max_mana,
             CurrentEndurance=m.endurance, MaxEndurance=m.max_endurance, X=m.x, Y=m.y, Z=m.z,
             Heading=m.heading, TargetID=m.target_id, Sitting=m.sitting, Combat=m.auto_attack,
