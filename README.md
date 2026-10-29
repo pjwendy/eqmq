@@ -57,7 +57,7 @@ The TLOs are properties of the `Bot`. Each one returns a fresh, read-only object
 
 | TLO | | MQ2 |
 |---|---|---|
-| `bot.Me` | You: `Name`, `Level`, `ClassID`, `RaceID`, `CurrentHPs`/`MaxHPs`/`PctHPs`, mana and endurance the same way, `X`/`Y`/`Z`/`Heading`/`Loc`, `TargetID`, `Sitting`/`Standing`, `Combat` (auto-attack), `Casting`/`CastingID`, `Gems` and `Gem(n or name)`, `Buffs` and `Buff(name)`, coin (`Platinum`... and `Money` in copper), `Weight`/`Capacity`/`Encumbered`, `Haters`/`Engaged`, `ExpPct`, `AAExpPct`, `AAPoints`, `AASplit`, `RunSpeed`, `Disciplines` | `${Me}` |
+| `bot.Me` | You: `Name`, `Level`, `ClassID`, `RaceID`, `Gender` (0 male, 1 female, 2 neutral), `CurrentHPs`/`MaxHPs`/`PctHPs`, mana and endurance the same way, `X`/`Y`/`Z`/`Heading`/`Loc`, `TargetID`, `Sitting`/`Standing`, `Combat` (auto-attack), `Casting`/`CastingID`, `Gems` and `Gem(n or name)`, `Buffs` and `Buff(name)`, coin (`Platinum`... and `Money` in copper), `Weight`/`Capacity`/`Encumbered`, `Haters`/`Engaged`, `ExpPct`, `AAExpPct`, `AAPoints`, `AASplit`, `RunSpeed`, `Disciplines` | `${Me}` |
 | `bot.Target` | Your target, as a `Spawn` (or `None`) | `${Target}` |
 | `bot.Spawn(search)`, `bot.Spawns(search)`, `bot.SpawnCount(search)`, `bot.NearestSpawn(n, search)` | Spawns in the zone matching an MQ2-style search | `${Spawn[]}`, `${SpawnCount[]}`, `${NearestSpawn[]}` |
 | `bot.Group` | `All` (members, you first), `Members`, `Leader`, `Member(n or name)` | `${Group}` |
