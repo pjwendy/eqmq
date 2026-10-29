@@ -508,7 +508,8 @@ if (prefs.chatf) for (const b of document.querySelectorAll("#chatbox [data-f]"))
 $("chattimes").checked = !!prefs.times;
 applyChatFilters();
 { // (the tab it was left on)
-  const v = prefs.view === "log" ? "log" : "map";
+  const want = new URLSearchParams(location.search).get("v");  // (?v=log: a link from the 3D view's toolbar)
+  const v = want === "log" || (want !== "map" && prefs.view === "log") ? "log" : "map";
   document.body.dataset.view = v;
   for (const b of document.querySelectorAll("#viewbar .tab")) b.classList.toggle("on", b.dataset.view === v);
 }
