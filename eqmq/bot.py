@@ -447,6 +447,10 @@ class Bot:
         me = self._state.me
         if me and me.sitting:  # (the mover stops a sitting character at once: "STOPPED", every time)
             await self.stand()
+            for _ in range(15):  # (and the server must have stood it up before the walk starts: asking and walking in one breath was stopped as well)
+                await asyncio.sleep(0.1)
+                if not (self._state.me and self._state.me.sitting):
+                    break
         cmd = pb.Command()
         cmd.move_to.x, cmd.move_to.y = x, y
         cmd.move_to.z = z if z is not None else (me.z if me else 0.0)
