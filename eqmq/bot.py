@@ -6,7 +6,7 @@ import inspect
 import logging
 import math
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 from .eqstr import EqStr
 from .events import EventPattern, render_chat, render_message
@@ -497,7 +497,7 @@ class Bot:
         cmd.click_door.door_id = door_id
         result = await self.command(cmd)
         if not result:
-            done.close()
+            done.cancel()
             return ZoneChange("REFUSED", "", 0, result.error)
         change = await done
         # an arrival in the zone we clicked from isn't the door's (a zoning still settling: Eboola's first
@@ -1021,11 +1021,13 @@ class Bot:
         cmd.disband.SetInParent()
         return await self.command(cmd)
 
-    def wait_zoned(self, timeout: float = 90) -> Awaitable[ZoneChange]:
+    def wait_zoned(self, timeout: float = 90) -> "asyncio.Task[ZoneChange]":
         """Wait for the next zone change to finish: ARRIVED or REFUSED ("TIMEOUT" if neither).
 
         It starts listening when called, so call it before the zoning can happen (e.g. in a death
-        handler) and await it later.
+        handler) and await it later; cancel() it if the zoning never starts. (A task, not a coroutine:
+        one dropped unawaited, a death's respawn wait when the camp stops, a zone_to whose command
+        raised, ends at its timeout instead of "coroutine was never awaited", about 500 a day.)
         """
         fut = asyncio.get_running_loop().create_future()
         self._zone_waiters.append(fut)
@@ -1036,7 +1038,7 @@ class Bot:
             except asyncio.TimeoutError:
                 return ZoneChange("TIMEOUT", "", 0, f"no zone change within {timeout:.0f}s")
 
-        return wait()
+        return asyncio.ensure_future(wait())
 
     async def zone_to(self, short_name: str, timeout: float | None = None, number: int = 0) -> ZoneChange:
         """Walk to this zone's zone line for a neighbouring zone (see Zone.Exits) and through it: the one
@@ -1056,7 +1058,7 @@ class Bot:
         cmd.zone_to.number = number
         result = await self.command(cmd)
         if not result:
-            done.close()
+            done.cancel()
             return ZoneChange("REFUSED", short_name, 0, result.error)
         return await done
 
