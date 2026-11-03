@@ -17,7 +17,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Spawn, Zone, WORLD_CONTAINER, WORLD_SLOT
 
-SDK_VERSION = "eqmq/0.17"
+SDK_VERSION = "eqmq/0.18"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 

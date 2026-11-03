@@ -178,6 +178,8 @@ class Spawn:
     Gender: int = 0    # 0 male, 1 female, 2 neutral (the model to draw)
     Primary: int = 0   # the model of what it holds in its primary hand (IT<n>), 0 if none
     Secondary: int = 0
+    CastingID: int = 0  # the spell it is casting, 0 if none
+    Status: int = 0     # bits: 1 mezzed, 2 rooted, 4 stunned, 8 feared or fleeing, 16 charmed
     _me_x: float = 0.0
     _me_y: float = 0.0
     _me_z: float = 0.0
@@ -185,6 +187,30 @@ class Spawn:
     @property
     def CleanName(self) -> str:
         return self.Name
+
+    @property
+    def Casting(self) -> bool:
+        return self.CastingID != 0
+
+    @property
+    def Mezzed(self) -> bool:
+        return bool(self.Status & 1)
+
+    @property
+    def Rooted(self) -> bool:
+        return bool(self.Status & 2)
+
+    @property
+    def Stunned(self) -> bool:
+        return bool(self.Status & 4)
+
+    @property
+    def Feared(self) -> bool:
+        return bool(self.Status & 8)
+
+    @property
+    def Charmed(self) -> bool:
+        return bool(self.Status & 16)
 
     @property
     def Loc(self) -> str:
@@ -207,7 +233,7 @@ class Spawn:
         return Spawn(
             ID=s.id, Name=s.name, Type=type_name, Level=s.level, ClassID=s.class_id,
             RaceID=s.race_id, X=s.x, Y=s.y, Z=s.z, Heading=s.heading, PctHPs=s.hp_pct,
-            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, _me_x=me_x, _me_y=me_y, _me_z=me_z,
+            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, CastingID=s.casting_spell_id, Status=s.status, _me_x=me_x, _me_y=me_y, _me_z=me_z,
         )
 
 

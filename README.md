@@ -70,7 +70,8 @@ The TLOs are properties of the `Bot`. Each one returns a fresh, read-only object
 A `Spawn` has `ID`, `Name`, `Type` (`PC`, `NPC`, `Pet`, `Bot`, `Corpse`), `Level`, `ClassID`,
 `RaceID`, `X`/`Y`/`Z`/`Heading`/`Loc`, `PctHPs`, `PctMana`, `TargetID` (for a mob in a fight, who it's
 hitting), `OwnerID` (pets), `Headless` (another headless character), `Gender` (0 male, 1 female, 2 neutral), `Primary` and `Secondary` (the item
-materials held in the hands, to draw a model with) and `Distance` (from you).
+materials held in the hands, to draw a model with), `CastingID` (the spell it is casting, 0 if none: `Casting`), `Status` (bits: 1 mezzed, 2 rooted,
+4 stunned, 8 feared or fleeing, 16 charmed: `Mezzed`, `Rooted`, `Stunned`, `Feared`, `Charmed`) and `Distance` (from you).
 
 **Spawn searches** use a subset of MQ2's syntax: `pc`, `npc`, `pet`, `bot`, `corpse`, `headless`,
 `id <n>`, `radius <n>`, `zradius <n>`, `range <min> <max>` (levels), and any other words match the
