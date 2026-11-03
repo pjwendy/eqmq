@@ -535,6 +535,13 @@ class Bot:
         cmd.aa_exp.percent = max(0, min(100, int(percent)))
         return await self.command(cmd)
 
+    async def buy_aa(self, rank_id: int) -> CommandResult:
+        """Spend AA points on one rank of an alternate advancement ability, as the client's AA window does (rank_id is aa_ranks.id, the
+        next rank of the ability; the server checks the level, the price and the prerequisites and says why when it won't)."""
+        cmd = pb.Command()
+        cmd.buy_aa.rank_id = int(rank_id)
+        return await self.command(cmd)
+
     async def surface(self, timeout: float = 30) -> MoveResult:
         """Under water: swim straight up to the surface for air (Me.Air: seconds left). The MoveResult
         when there, or REFUSED with why not (not under water, something solid above)."""
