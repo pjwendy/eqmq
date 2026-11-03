@@ -57,7 +57,7 @@ The TLOs are properties of the `Bot`. Each one returns a fresh, read-only object
 
 | TLO | | MQ2 |
 |---|---|---|
-| `bot.Me` | You: `Name`, `Level`, `ClassID`, `RaceID`, `Gender` (0 male, 1 female, 2 neutral), `CurrentHPs`/`MaxHPs`/`PctHPs`, mana and endurance the same way, `X`/`Y`/`Z`/`Heading`/`Loc`, `TargetID`, `Sitting`/`Standing`, `Combat` (auto-attack), `Casting`/`CastingID`, `Gems` and `Gem(n or name)`, `Buffs` and `Buff(name)`, coin (`Platinum`... and `Money` in copper), `Weight`/`Capacity`/`Encumbered`, `Haters`/`Engaged`, `ExpPct`, `AAExpPct`, `AAPoints`, `AASplit`, `RunSpeed`, `Disciplines` | `${Me}` |
+| `bot.Me` | You: `Name`, `Level`, `ClassID`, `RaceID`, `Gender` (0 male, 1 female, 2 neutral), `CurrentHPs`/`MaxHPs`/`PctHPs`, mana and endurance the same way, `X`/`Y`/`Z`/`Heading`/`Loc`, `TargetID`, `Sitting`/`Standing`, `Combat` (auto-attack), `Casting`/`CastingID`, `Gems` and `Gem(n or name)`, `Buffs` and `Buff(name)`, coin (`Platinum`... and `Money` in copper), `Weight`/`Capacity`/`Encumbered`, `Haters`/`Engaged`, `ExpPct`, `AAExpPct`, `AAPoints`, `AASplit`, `RunSpeed`, `Air`/`MaxAir` (seconds of breath under water), `GameHour`, `Disciplines` | `${Me}` |
 | `bot.Target` | Your target, as a `Spawn` (or `None`) | `${Target}` |
 | `bot.Spawn(search)`, `bot.Spawns(search)`, `bot.SpawnCount(search)`, `bot.NearestSpawn(n, search)` | Spawns in the zone matching an MQ2-style search | `${Spawn[]}`, `${SpawnCount[]}`, `${NearestSpawn[]}` |
 | `bot.Group` | `All` (members, you first), `Members`, `Leader`, `Member(n or name)` | `${Group}` |
@@ -69,7 +69,8 @@ The TLOs are properties of the `Bot`. Each one returns a fresh, read-only object
 
 A `Spawn` has `ID`, `Name`, `Type` (`PC`, `NPC`, `Pet`, `Bot`, `Corpse`), `Level`, `ClassID`,
 `RaceID`, `X`/`Y`/`Z`/`Heading`/`Loc`, `PctHPs`, `PctMana`, `TargetID` (for a mob in a fight, who it's
-hitting), `OwnerID` (pets), `Headless` (another headless character) and `Distance` (from you).
+hitting), `OwnerID` (pets), `Headless` (another headless character), `Gender` (0 male, 1 female, 2 neutral), `Primary` and `Secondary` (the item
+materials held in the hands, to draw a model with) and `Distance` (from you).
 
 **Spawn searches** use a subset of MQ2's syntax: `pc`, `npc`, `pet`, `bot`, `corpse`, `headless`,
 `id <n>`, `radius <n>`, `zradius <n>`, `range <min> <max>` (levels), and any other words match the
@@ -88,7 +89,10 @@ mob died shows up in state and events, as it would on a player's screen.
 | `sit()`, `stand()` | |
 | `moveto(x, y, z, wait=False)` | Walk along the server's navmesh at your run speed. With `wait=True` you get a `MoveResult` when the walk ends: `ARRIVED`, `STOPPED`, `STUCK`, `NO_PATH`, `ZONE_LINE`, `LOCKED` (a door you have no key for) or `REFUSED`. |
 | `route_length(x, y, z)` | How far that walk would be, without walking (`None`: no way there). |
-| `stop()` | Stop walking. |
+| `route_path(x, y, z)` | The points of that walk in order (at most about 120), without walking; `None` if there's no way there. |
+| `zone_plan(short_name)` | The walk `zone_to` would take to the zone line, without walking: its length and how much of it is a swim. |
+| `surface()` | Under water: swim straight up for air (`Me.Air` says how long you have). |
+| `stop()` | Stop walking. `moveto` stands a sitting character up first, and waits for the stand-up, so the walk isn't refused. |
 | `zone_to(short_name)` | Walk to the zone line for a neighbouring zone and through it. Returns a `ZoneChange` once you're there. |
 | `gm_zone(short_name)` | `#zone` there (needs GM status). |
 | `cast(spell, target, wait=False)`, `stopcast()`, `memorize(gem, spell)`, `scribe(scroll)` | Spells, by gem number or name. |
@@ -98,6 +102,11 @@ mob died shows up in state and events, as it would on a player's screen.
 | `send_parcel(npc, item, to, note)`, `retrieve_parcel(npc, parcel)` | Parcels, at an open parcel merchant: `open_merchant` returns `ParcelMerchant` and the `Parcels` waiting for you (`Parcel`: `Name`, `Quantity`, `From`, `Note`). Not attuned items, nor no-drop ones unless the server lets no-drop be traded (`World:FVNoDropFlag`); one parcel every 30 seconds. |
 | `move_item(from_slot, to_slot)` | Move items between inventory, bags, worn slots and the bank. |
 | `click_object(object_id)`, `combine(container_slot)`, `close_object()` | Tradeskills. `click_object` opens a world container (an oven, forge, loom, brew barrel, kiln...) by its id in the zone's object table, within reach; fill it with `move_item(slot, WORLD_SLOT + n)`; `combine()` (default `WORLD_CONTAINER`) is the Combine button, or pass an inventory bag's slot for a portable container. The product and any skill-up come as items and text. Products land on the cursor (one already there queues the next behind it: empty it between combines). |
+| `click_door(door_id)` | Click a door by its id, as the client does (stand within reach first): a teleporter or a Plane of Knowledge book takes you where it goes (`ZoneChange`). |
+| `drag_corpse(corpse)`, `drop_corpse(corpse)` | `/corpse drag` and `/corpse drop`: a corpse of yours, or one you are consented to, follows you. |
+| `aa_exp(percent)`, `buy_aa(rank_id)` | AA: the share of experience going to AA (the client's slider; 0 off), and one rank of an ability bought with a point (`rank_id` is the `aa_ranks.id` of the next rank; the server checks the level, the price and the prerequisites and says why when it won't). AA experience only starts at level 51. |
+| `destroy(item)` | Destroy an item, as the client's Destroy button. |
+| `pack_give(bot, item)`, `pack_list(bot)`, `pack_take(bot, slot)` | A bot's pack (`^pack`): what it carries in its general slots and bags, as `PackItem`s; put an item in, take one back to your cursor. |
 | `ability(name)` | A combat ability: kick, bash, backstab, taunt, frenzy, the monk strikes; sneak, hide, feign death (`ABILITIES`). |
 | `discipline(spell_id)` | A discipline you know (`Me.Disciplines`). |
 | `pet(command)`, `Pet()` | Command your pet (`"attack"`, `"back off"`, `"follow"`, `"taunt on"`, ... `PET_COMMANDS`); your pet. |
@@ -191,6 +200,9 @@ ever see protocol state, never raw packets.
 - A log of the game text worth seeing (chat, experience, kills, loot, trades, deaths in the group).
 - Optionally, the server's navmesh: the walkable area, with islands a character can't walk to in
   their own colours.
+- The route a walk is taking, drawn as a line to where the character is going, and its model, race and gender, buffs and experience.
+- Its state as server-sent events at `/events` (any origin may read it), which is what the guild's live 3D view draws from; `?v=log` opens the
+  log and chat tab.
 
 ```python
 from eqmq.viewer import MapViewer
@@ -215,6 +227,12 @@ The page only displays. It can't send the character commands.
   than a fixed number.
 - **Rate limit.** The server accepts `HeadlessClients:CommandRateLimit` commands a second (20 by
   default). A refused command says so in its `error`.
+- **Combat text.** A client prints its own damage lines from the combat packets; a headless character gets the same wording as `message`/`line`
+  events for what you, your group, your bots and your pets do and take: `X hits Y for N points of damage.` (with the verb for the kind of hit:
+  slashes, crushes, pierces, bashes, kicks) and `X tries to hit Y, but misses!`. Spell damage arrives as the server's own messages.
+- **Bots.** Your EQEmu bots stand still to cast and don't cast while moving, say `Pulling X.` and `Incoming X!` when one pulls and the mob has
+  come for the group, and `^feign` lies a bot down feigning (a monk, necromancer or shadowknight). A bot of those classes that is losing a fight
+  feigns by itself, and a pet near death is called off.
 - **Ending a session** logs the character out at once (saved, no linkdead). `bot.close()` does it;
   so does your program exiting.
 - **The server decides.** eqmq never bypasses a rule. A command is the packet a client would send,
