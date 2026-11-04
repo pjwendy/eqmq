@@ -60,7 +60,7 @@ The TLOs are properties of the `Bot`. Each one returns a fresh, read-only object
 | `bot.Me` | You: `Name`, `Level`, `ClassID`, `RaceID`, `Gender` (0 male, 1 female, 2 neutral), `CurrentHPs`/`MaxHPs`/`PctHPs`, mana and endurance the same way, `X`/`Y`/`Z`/`Heading`/`Loc`, `TargetID`, `Sitting`/`Standing`, `Combat` (auto-attack), `Casting`/`CastingID`, `Gems` and `Gem(n or name)`, `Buffs` and `Buff(name)`, coin (`Platinum`... and `Money` in copper), `Weight`/`Capacity`/`Encumbered`, `Haters`/`Engaged`, `ExpPct`, `AAExpPct`, `AAPoints`, `AASplit`, `RunSpeed`, `Air`/`MaxAir` (seconds of breath under water), `GameHour`, `Disciplines` | `${Me}` |
 | `bot.Target` | Your target, as a `Spawn` (or `None`) | `${Target}` |
 | `bot.Spawn(search)`, `bot.Spawns(search)`, `bot.SpawnCount(search)`, `bot.NearestSpawn(n, search)` | Spawns in the zone matching an MQ2-style search | `${Spawn[]}`, `${SpawnCount[]}`, `${NearestSpawn[]}` |
-| `bot.Group` | `All` (members, you first), `Members`, `Leader`, `Member(n or name)` | `${Group}` |
+| `bot.Group` | `All` (members, you first: each a `GroupMember` with `Name`, `ID`, `Leader`, `Bot` and `Buffs`, what is on it), `Members`, `Leader`, `Member(n or name)` | `${Group}` |
 | `bot.Zone` | `ShortName`, `Name`, `ID`, `Exits` (one per neighbouring zone, with where its zone line is) and `Exit(short_name)` | `${Zone}` |
 | `bot.Inventory()`, `bot.Bank()`, `bot.FindItem(name)`, `bot.FindItemCount(name)` | Items, with their slots and stats | `${FindItem[]}` |
 | `bot.Book()`, `bot.BookSpell(name)` | The spell book | `${Me.Book[]}` |
@@ -71,7 +71,7 @@ A `Spawn` has `ID`, `Name`, `Type` (`PC`, `NPC`, `Pet`, `Bot`, `Corpse`), `Level
 `RaceID`, `X`/`Y`/`Z`/`Heading`/`Loc`, `PctHPs`, `PctMana`, `TargetID` (for a mob in a fight, who it's
 hitting), `OwnerID` (pets), `Headless` (another headless character), `Gender` (0 male, 1 female, 2 neutral), `Primary` and `Secondary` (the item
 materials held in the hands, to draw a model with), `CastingID` (the spell it is casting, 0 if none: `Casting`), `Status` (bits: 1 mezzed, 2 rooted,
-4 stunned, 8 feared or fleeing, 16 charmed: `Mezzed`, `Rooted`, `Stunned`, `Feared`, `Charmed`), `Distance` (from you) and, for an NPC, `AggroRange` (the radius it notices you in, 0 if it never aggros), `AssistRange` (the radius in which it calls others) and `Aggro` (bits: 1 hostile on sight, 2 may aggro, 4 aggros even a character it cons grey to), by the server's own aggro rules: `KOS`, `MayAggro`, `AggrosGrey` and `WillAggro(my_level, invisible)` read them.
+4 stunned, 8 feared or fleeing, 16 charmed: `Mezzed`, `Rooted`, `Stunned`, `Feared`, `Charmed`), `Distance` (from you) and, for an NPC, `AggroRange` (the radius it notices you in, 0 if it never aggros), `Buffs` (an NPC that is fighting, or has you on its hate list: the spells on it), `AssistRange` (the radius in which it calls others) and `Aggro` (bits: 1 hostile on sight, 2 may aggro, 4 aggros even a character it cons grey to), by the server's own aggro rules: `KOS`, `MayAggro`, `AggrosGrey` and `WillAggro(my_level, invisible)` read them.
 
 **Spawn searches** use a subset of MQ2's syntax: `pc`, `npc`, `pet`, `bot`, `corpse`, `headless`,
 `id <n>`, `radius <n>`, `zradius <n>`, `range <min> <max>` (levels), and any other words match the
@@ -201,6 +201,12 @@ ever see protocol state, never raw packets.
 - A log of the game text worth seeing (chat, experience, kills, loot, trades, deaths in the group).
 - Optionally, the server's navmesh: the walkable area, with islands a character can't walk to in
   their own colours.
+- An **Enemies** panel (and, in the guild's 3D player, an Enemies window): everything that has the group on its hate list or is hitting one of us, as the client's
+  extended target window shows it: level, health, what is on it (mezzed, rooted, stunned, feared or fleeing, charmed, casting) and who it is after. They are ringed in red on the map.
+- Point at anything for its name and **level** (a spawn: its type, health and place; a camp: its mobs, levels, spawns and respawn, and who holds it).
+- On the guild's maps, a **Camps** layer: the zone's named hunting areas as circles (the camp soldier's pull radius), gold for this character's camp,
+  blue for another leader's, grey for a free one, each with its name and the leaders camped there; and a **Trail** layer, where this character has
+  been in the last half hour, coloured by what it was doing.
 - The route a walk is taking, drawn as a line to where the character is going, and its model, race and gender, buffs and experience.
 - Its state as server-sent events at `/events` (any origin may read it), which is what the guild's live 3D view draws from; `?v=log` opens the
   log and chat tab.
