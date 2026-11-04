@@ -71,7 +71,7 @@ A `Spawn` has `ID`, `Name`, `Type` (`PC`, `NPC`, `Pet`, `Bot`, `Corpse`), `Level
 `RaceID`, `X`/`Y`/`Z`/`Heading`/`Loc`, `PctHPs`, `PctMana`, `TargetID` (for a mob in a fight, who it's
 hitting), `OwnerID` (pets), `Headless` (another headless character), `Gender` (0 male, 1 female, 2 neutral), `Primary` and `Secondary` (the item
 materials held in the hands, to draw a model with), `CastingID` (the spell it is casting, 0 if none: `Casting`), `Status` (bits: 1 mezzed, 2 rooted,
-4 stunned, 8 feared or fleeing, 16 charmed: `Mezzed`, `Rooted`, `Stunned`, `Feared`, `Charmed`) and `Distance` (from you).
+4 stunned, 8 feared or fleeing, 16 charmed: `Mezzed`, `Rooted`, `Stunned`, `Feared`, `Charmed`), `Distance` (from you) and, for an NPC, `AggroRange` (the radius it notices you in, 0 if it never aggros), `AssistRange` (the radius in which it calls others) and `Aggro` (bits: 1 hostile on sight, 2 may aggro, 4 aggros even a character it cons grey to), by the server's own aggro rules: `KOS`, `MayAggro`, `AggrosGrey` and `WillAggro(my_level, invisible)` read them.
 
 **Spawn searches** use a subset of MQ2's syntax: `pc`, `npc`, `pet`, `bot`, `corpse`, `headless`,
 `id <n>`, `radius <n>`, `zradius <n>`, `range <min> <max>` (levels), and any other words match the

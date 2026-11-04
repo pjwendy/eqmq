@@ -180,6 +180,9 @@ class Spawn:
     Secondary: int = 0
     CastingID: int = 0  # the spell it is casting, 0 if none
     Status: int = 0     # bits: 1 mezzed, 2 rooted, 4 stunned, 8 feared or fleeing, 16 charmed
+    AggroRange: float = 0.0   # an NPC: the radius it notices you in (0: it never aggros)
+    AssistRange: float = 0.0  # an NPC: the radius in which it calls others to help
+    Aggro: int = 0            # an NPC with an aggro range: bits 1 hostile on sight (KOS), 2 may aggro (threatening), 4 aggros even a character it cons grey to
     _me_x: float = 0.0
     _me_y: float = 0.0
     _me_z: float = 0.0
@@ -213,6 +216,29 @@ class Spawn:
         return bool(self.Status & 16)
 
     @property
+    def KOS(self) -> bool:
+        """Hostile on sight to you (its faction toward you scowls): it attacks when it notices you, unless it cons grey to you and isn't one that aggros grey."""
+        return bool(self.Aggro & 1)
+
+    @property
+    def MayAggro(self) -> bool:
+        """Its faction toward you is threatening: a quarter chance each time it looks."""
+        return bool(self.Aggro & 2)
+
+    @property
+    def AggrosGrey(self) -> bool:
+        """It aggros you even when you con grey to it (always-aggro, undead, or at the level the server's aggro rules ignore con from)."""
+        return bool(self.Aggro & 4)
+
+    def WillAggro(self, my_level: int, invisible: bool = False) -> bool:
+        """It would aggro you if you came within AggroRange, by the server's rules as far as the spawn tells: hostile to you, not blind to you
+        (invisible), and either not grey to you or one that aggros grey. A 'threatening' one is not counted (it is a chance, MayAggro)."""
+        if invisible or not (self.Aggro & 1) or self.AggroRange <= 0:
+            return False
+        grey = my_level > 15 and self.Level <= my_level - int((my_level + 5) / 3) or (my_level <= 15 and self.Level - my_level <= -6)
+        return not grey or self.AggrosGrey
+
+    @property
     def Loc(self) -> str:
         return f"{self.Y:.2f}, {self.X:.2f}, {self.Z:.2f}"
 
@@ -233,7 +259,7 @@ class Spawn:
         return Spawn(
             ID=s.id, Name=s.name, Type=type_name, Level=s.level, ClassID=s.class_id,
             RaceID=s.race_id, X=s.x, Y=s.y, Z=s.z, Heading=s.heading, PctHPs=s.hp_pct,
-            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, CastingID=s.casting_spell_id, Status=s.status, _me_x=me_x, _me_y=me_y, _me_z=me_z,
+            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, CastingID=s.casting_spell_id, Status=s.status, AggroRange=s.aggro_range, AssistRange=s.assist_range, Aggro=s.aggro, _me_x=me_x, _me_y=me_y, _me_z=me_z,
         )
 
 

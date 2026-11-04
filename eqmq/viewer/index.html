@@ -146,6 +146,7 @@
   <label title="The server's navmesh: where characters can walk. The biggest piece is green; each other colour is a separate piece (island) a character can't walk to from the rest. Dashed lines are off-mesh links."><input type="checkbox" id="navmesh"> Navmesh<span id="navinfo" class="muted"></span></label>
   <label title="Where this character has been in the last half hour, coloured by what it was doing (the runner's trail; only on the guild's maps)" id="trailbox" style="display:none"><input type="checkbox" id="trail"> Trail</label>
   <label title="The zone's hunting areas, named, with which of our leaders is camped at each (the guild's maps only). Gold: this character's camp; blue: another leader's; purple: planned for a pair by the camp ladder, not yet held; grey: free. Hover one for its mobs and levels." id="campsbox" style="display:none"><input type="checkbox" id="camps" checked> Camps</label>
+  <label title="Draw the radius each hostile NPC notices you in (the server's aggro range): red, those that attack on sight (KOS) and aren't grey to you; orange, those that may (threatening). Hover a mob to see its own, whatever this says."><input type="checkbox" id="aggro"> Aggro</label>
   <label title="Fade map and spawns far above or below the bot"><input type="checkbox" id="zfilter"> Height ±<input type="number" id="zrange" value="40" min="5" step="5"></label>
   <input type="text" id="filter" placeholder="Find spawn…">
 </div>
@@ -193,10 +194,10 @@ function load() { try { return JSON.parse(localStorage.getItem("eqmq-viewer") ||
 function save() {
   try { localStorage.setItem("eqmq-viewer", JSON.stringify({
     labels: $("labels").checked, names: $("names").checked, zfilter: $("zfilter").checked, zrange: $("zrange").value,
-    follow: $("follow").checked, navmesh: $("navmesh").checked, trail: $("trail").checked, camps: $("camps").checked, concol: $("concol").checked,
+    follow: $("follow").checked, navmesh: $("navmesh").checked, trail: $("trail").checked, camps: $("camps").checked, aggro: $("aggro").checked, concol: $("concol").checked,
     view: document.body.dataset.view, chatf: chatFilters(), times: $("chattimes").checked })); } catch {}
 }
-for (const k of ["labels", "names", "zfilter", "follow", "navmesh", "trail", "camps", "concol"]) if (k in prefs) $(k).checked = prefs[k];
+for (const k of ["labels", "names", "zfilter", "follow", "navmesh", "trail", "camps", "aggro", "concol"]) if (k in prefs) $(k).checked = prefs[k];
 
 // how a level cons to us: EQEmu's Mob::GetLevelCon (the SoF+ system, the server's default)
 const CON_NAMES = { gray: "grey", green: "green", lblue: "light blue", blue: "blue", white: "white", yellow: "yellow", red: "red" };
@@ -356,6 +357,37 @@ async function loadCamps() {
   } catch (e) { /* no camps here */ }
 }
 $("camps").addEventListener("change", () => { try { save(); } catch (e) {} draw(); });
+$("aggro").addEventListener("change", () => { try { save(); } catch (e) {} draw(); });
+// what an NPC does about us, from the server's own aggro rules (the spawn's ar, as and ag): [text, colour] or null
+const myInvisible = () => !!(state && state.me && (state.me.buffs || []).some(b => /invisib|shrink|camouflage|hide/i.test(b[0])));
+function aggroOf(s) {
+  if (s.t !== "NPC" || !(s.ar > 0)) return null;
+  const c = state.me.level > 0 ? con(state.me.level, s.l) : "white", grey = c === "gray" && !(s.ag & 4);
+  const range = Math.round(s.ar);
+  if (s.ag & 1) return grey ? [`KOS, but grey to you: will not aggro (notices within ${range})`, "#9aa4b2"]
+    : myInvisible() ? [`KOS, but you are invisible (notices within ${range})`, "#d9a441"]
+    : [`<b>KOS: will aggro within ${range}</b>`, "#e0524a"];
+  if (s.ag & 2) return grey ? [`threatening, but grey to you: will not aggro`, "#9aa4b2"] : [`threatening: may aggro (25% a look) within ${range}`, "#e08a3c"];
+  return [`not hostile to you (notices within ${range})`, "#6fbf73"];
+}
+function drawAggro(w, h) {
+  if (!state || !state.connected) return;
+  const all = $("aggro").checked;
+  for (const s of state.spawns) {
+    if (s.t !== "NPC" || !(s.ar > 0)) continue;
+    const a = aggroOf(s); if (!a) continue;
+    const hot = a[1] === "#e0524a" || a[1] === "#e08a3c";
+    if (!(s.id === hoveredId || (all && hot))) continue;
+    const [sx, sy] = toScreen(-s.x, -s.y), r = s.ar * view.scale;
+    if (sx < -r || sx > w + r || sy < -r || sy > h + r) continue;
+    ctx.strokeStyle = a[1]; ctx.fillStyle = a[1]; ctx.lineWidth = s.id === hoveredId ? 2.5 : 1.2; ctx.globalAlpha = s.id === hoveredId ? 0.95 : 0.55;
+    ctx.beginPath(); ctx.arc(sx, sy, Math.max(r, 3), 0, 7); ctx.stroke();
+    ctx.globalAlpha = s.id === hoveredId ? 0.10 : 0.04; ctx.fill(); ctx.globalAlpha = 1;
+    if (s.id === hoveredId && s.as > s.ar + 1) {  // it calls for help further than it notices: the assist radius, dashed
+      ctx.setLineDash([5, 5]); ctx.strokeStyle = "#b07ad6"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(sx, sy, s.as * view.scale, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+}
 setInterval(loadCamps, 10000); loadCamps();
 const niceName = n => String(n || "").replace(/_/g, " ").replace(/^#/, "").replace(/\d+$/, "").trim();
 function drawCamps() {
@@ -390,6 +422,7 @@ function draw() {
   drawNav(zw, w, h);
   drawCamps();
   drawTrail();
+  drawAggro(w, h);
 
   // map lines, batched by colour and by in/out of the height window
   ctx.lineWidth = 1;
@@ -707,7 +740,9 @@ function showTip() {
   if (best) {
     const kind = { NPC: "NPC", PC: "player", Bot: "bot", Pet: "pet", Corpse: "corpse" }[best.t] || best.t;
     tip.innerHTML = `${conDot(best)}<b>${esc(niceName(best.n))}</b> <span class="muted">level</span> <b>${best.l}</b> <span class="muted">${kind}${best.ai ? " · AI" : ""}</span><br>` +
-      `${best.hp}% HP · loc ${best.y.toFixed(0)}, ${best.x.toFixed(0)}, ${best.z.toFixed(0)}`;
+      `${best.hp}% HP · loc ${best.y.toFixed(0)}, ${best.x.toFixed(0)}, ${best.z.toFixed(0)}` +
+      (() => { const a = aggroOf(best); return a ? `<br><span style="color:${a[1]}">${a[0]}</span>` : ""; })() +
+      (best.t === "NPC" && best.as > 0 && best.ar > 0 ? `<br><span class="muted">calls for help within ${Math.round(best.as)}</span>` : "");
   } else {
     const lv = camp.levels && camp.levels.length ? `level ${camp.levels[0]}${camp.levels[camp.levels.length - 1] !== camp.levels[0] ? "-" + camp.levels[camp.levels.length - 1] : ""}` : "";
     const mobs = [...new Set((camp.mobs || []).map(niceName))].slice(0, 6).join(", ");
