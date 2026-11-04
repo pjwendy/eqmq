@@ -144,6 +144,7 @@
   <label title="Names and levels next to every spawn"><input type="checkbox" id="names"> Captions</label>
   <label title="Colour NPCs by how they con to you (grey, green, light blue, blue, white, yellow, red)"><input type="checkbox" id="concol" checked> Con colours</label>
   <label title="The server's navmesh: where characters can walk. The biggest piece is green; each other colour is a separate piece (island) a character can't walk to from the rest. Dashed lines are off-mesh links."><input type="checkbox" id="navmesh"> Navmesh<span id="navinfo" class="muted"></span></label>
+  <label title="Where this character has been in the last half hour, coloured by what it was doing (the runner's trail; only on the guild's maps)" id="trailbox" style="display:none"><input type="checkbox" id="trail"> Trail</label>
   <label title="Fade map and spawns far above or below the bot"><input type="checkbox" id="zfilter"> Height ±<input type="number" id="zrange" value="40" min="5" step="5"></label>
   <input type="text" id="filter" placeholder="Find spawn…">
 </div>
@@ -191,10 +192,10 @@ function load() { try { return JSON.parse(localStorage.getItem("eqmq-viewer") ||
 function save() {
   try { localStorage.setItem("eqmq-viewer", JSON.stringify({
     labels: $("labels").checked, names: $("names").checked, zfilter: $("zfilter").checked, zrange: $("zrange").value,
-    follow: $("follow").checked, navmesh: $("navmesh").checked, concol: $("concol").checked,
+    follow: $("follow").checked, navmesh: $("navmesh").checked, trail: $("trail").checked, concol: $("concol").checked,
     view: document.body.dataset.view, chatf: chatFilters(), times: $("chattimes").checked })); } catch {}
 }
-for (const k of ["labels", "names", "zfilter", "follow", "navmesh", "concol"]) if (k in prefs) $(k).checked = prefs[k];
+for (const k of ["labels", "names", "zfilter", "follow", "navmesh", "trail", "concol"]) if (k in prefs) $(k).checked = prefs[k];
 
 // how a level cons to us: EQEmu's Mob::GetLevelCon (the SoF+ system, the server's default)
 const CON_NAMES = { gray: "grey", green: "green", lblue: "light blue", blue: "blue", white: "white", yellow: "yellow", red: "red" };
@@ -310,6 +311,37 @@ function zWindow() {
   return [state.me.z - r, state.me.z + r];
 }
 
+// the trail: the runner's places for this character, the last half hour (the guild's maps answer /trail; a plain viewer doesn't, and the box stays hidden)
+let trailPts = [];
+const TRAIL_COLOURS = ["#d9a441", "#5aa0e0", "#6fbf73", "#d9645a", "#b07ad6", "#4cc2c0", "#e08a3c", "#9aa4b2", "#e0c34c", "#d66aa5"], trailColour = new Map();
+async function loadTrail() {
+  try {
+    const r = await fetch("trail");
+    if (!r.ok) return;
+    $("trailbox").style.display = "";
+    if ($("trail").checked) trailPts = (await r.json()).places || [];
+  } catch (e) { /* no trail here */ }
+}
+$("trail").addEventListener("change", () => { loadTrail(); try { save(); } catch (e) {} });
+setInterval(loadTrail, 5000); loadTrail();
+function drawTrail() {
+  if (!$("trail").checked || trailPts.length < 2) return;
+  ctx.lineWidth = 2.2; ctx.lineJoin = "round"; ctx.globalAlpha = 0.9;
+  let prev = null;
+  for (const p of trailPts) {   // ["p", t, zone, x, y, z, hp, mana, flags, order, state]
+    if (p[2] !== zone) { prev = null; continue; }
+    if (prev && p[1] - prev[1] < 600) {
+      const k = prev[9] || "-"; if (!trailColour.has(k)) trailColour.set(k, TRAIL_COLOURS[trailColour.size % TRAIL_COLOURS.length]);
+      const [ax, ay] = toScreen(-prev[3], -prev[4]), [bx, by] = toScreen(-p[3], -p[4]);
+      ctx.strokeStyle = trailColour.get(k); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    }
+    prev = p;
+  }
+  const first = trailPts.find(p => p[2] === zone);
+  if (first) { const [sx, sy] = toScreen(-first[3], -first[4]); ctx.fillStyle = "#6fbf73"; ctx.beginPath(); ctx.arc(sx, sy, 4, 0, 7); ctx.fill(); }
+  ctx.globalAlpha = 1;
+}
+
 function draw() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   ctx.fillStyle = css("--bg"); ctx.fillRect(0, 0, w, h);
@@ -318,6 +350,7 @@ function draw() {
   const inZ = z => !zw || (z >= zw[0] && z <= zw[1]);
   const [vx0, vy0] = toMap(0, 0), [vx1, vy1] = toMap(w, h);
   drawNav(zw, w, h);
+  drawTrail();
 
   // map lines, batched by colour and by in/out of the height window
   ctx.lineWidth = 1;
