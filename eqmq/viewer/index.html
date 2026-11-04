@@ -58,6 +58,7 @@
   #enemies .st.mez { background: #b07ad6; } #enemies .st.root { background: #6fbf73; } #enemies .st.stun { background: #e0c34c; } #enemies .st.fear { background: #e08a3c; }
   #enemies .st.charm { background: #4cc2c0; } #enemies .st.cast { background: #e0524a; color: #fff; }
   #group .member { margin: 6px 0 2px; }
+  .buffrow { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; } .buffrow .bf { font-size: 10px; line-height: 1.3; padding: 0 4px; border-radius: 3px; background: var(--border); color: var(--muted); white-space: nowrap; max-width: 118px; overflow: hidden; text-overflow: ellipsis; }
   #group .who { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
   #group .who b { font-weight: 600; }
   #group .who .lead::after { content: " \2605"; color: var(--me); }
@@ -585,8 +586,10 @@ function renderGroup(group) {
     (m.exp !== undefined ? `<div class="xprow" title="Experience through level ${m.level}"><b>XP</b>${bar("xp", m.exp)}<span>${m.exp.toFixed(1)}%</span></div>` : "") +
     (m.has_aa ? `<div class="xprow" title="AA experience: ${m.aa_split}% of experience goes to AA"><b>AA</b>${bar("aa", m.aa)}<span>${m.aa.toFixed(1)}%</span></div>` +
       `<div class="xprow"><span style="text-align:left">${m.aa_points} AA point${m.aa_points === 1 ? "" : "s"} &middot; ${m.aa_split}% to AA</span></div>` : "") +
+    ((m.buffs || []).length ? `<div class="buffrow">${m.buffs.map(b => `<span class="bf" title="${esc(b[0])}${b[1] < 0 ? " (permanent)" : ` &middot; ${fmtTicks(b[1])} left`}">${esc(b[0])}</span>`).join("")}</div>` : "") +
     `</div>`).join("") || '<span class="muted">&mdash;</span>';
 }
+const fmtTicks = t => { const s = t * 6; return s >= 3600 ? Math.round(s / 360) / 10 + " h" : s >= 60 ? Math.round(s / 60) + " m" : s + " s"; };
 
 // the chat window: the server's message types are the client's colour numbers; the user colours (256 on) are the
 // defaults of its chat settings. A line's group (for the filters): chat, combat, spells, loot, other.

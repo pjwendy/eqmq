@@ -233,13 +233,13 @@ class MapViewer(MQPlugin):
                               "leader": bool(m and m.Leader) or not members, "here": True,
                               "exp": round(me.ExpPct, 1), "aa": round(me.AAExpPct, 1), "aa_points": me.AAPoints,
                               "aa_split": me.AASplit, "has_aa": me.Level >= 51 or me.AAPoints > 0 or me.AAExpPct > 0
-                              or me.AASplit > 0})
+                              or me.AASplit > 0, "buffs": [[b.Name, b.Ticks, b.ID] for b in me.Buffs][:40]})
                 continue
             s = spawns.get(m.ID) if m and m.ID else None
             group.append({"id": s.ID if s else 0, "name": name, "cls": CLASS_SHORT.get(s.ClassID, "?") if s else "?", "level": s.Level if s else 0,
                           "hp": s.PctHPs if s else 0, "mana": s.PctMana if s else 0,
                           "has_mana": bool(s and s.ClassID not in NO_MANA), "leader": bool(m and m.Leader),
-                          "here": s is not None})
+                          "here": s is not None, "buffs": [[b.Name, b.Ticks, b.ID] for b in (m.Buffs if m else ())][:40]})
         plan = None
         if self.plan:
             try:

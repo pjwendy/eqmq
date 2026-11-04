@@ -382,6 +382,7 @@ class GroupMember:
     ID: int          # spawn id, 0 if not in this zone
     Leader: bool
     Bot: bool        # an EQEmu bot
+    Buffs: tuple = ()  # Buff, what is on them now (their own are Me.Buffs)
 
 
 @dataclass(frozen=True)
@@ -411,7 +412,7 @@ class Group:
     def from_pb(m: pb.Self) -> "Group | None":
         if not m.group:
             return None
-        return Group(tuple(GroupMember(g.name, g.spawn_id, g.leader, g.bot) for g in m.group), _me=m.name)
+        return Group(tuple(GroupMember(g.name, g.spawn_id, g.leader, g.bot, tuple(Buff(b.spell_id, b.name, b.ticks) for b in g.buffs)) for g in m.group), _me=m.name)
 
 
 @dataclass(frozen=True)
