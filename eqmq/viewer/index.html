@@ -145,6 +145,7 @@
   <label title="Colour NPCs by how they con to you (grey, green, light blue, blue, white, yellow, red)"><input type="checkbox" id="concol" checked> Con colours</label>
   <label title="The server's navmesh: where characters can walk. The biggest piece is green; each other colour is a separate piece (island) a character can't walk to from the rest. Dashed lines are off-mesh links."><input type="checkbox" id="navmesh"> Navmesh<span id="navinfo" class="muted"></span></label>
   <label title="Where this character has been in the last half hour, coloured by what it was doing (the runner's trail; only on the guild's maps)" id="trailbox" style="display:none"><input type="checkbox" id="trail"> Trail</label>
+  <label title="The zone's hunting areas, named, with which of our leaders is camped at each (the guild's maps only). Gold: this character's camp; blue: another leader's; grey: free. Hover one for its mobs and levels." id="campsbox" style="display:none"><input type="checkbox" id="camps" checked> Camps</label>
   <label title="Fade map and spawns far above or below the bot"><input type="checkbox" id="zfilter"> Height ±<input type="number" id="zrange" value="40" min="5" step="5"></label>
   <input type="text" id="filter" placeholder="Find spawn…">
 </div>
@@ -192,10 +193,10 @@ function load() { try { return JSON.parse(localStorage.getItem("eqmq-viewer") ||
 function save() {
   try { localStorage.setItem("eqmq-viewer", JSON.stringify({
     labels: $("labels").checked, names: $("names").checked, zfilter: $("zfilter").checked, zrange: $("zrange").value,
-    follow: $("follow").checked, navmesh: $("navmesh").checked, trail: $("trail").checked, concol: $("concol").checked,
+    follow: $("follow").checked, navmesh: $("navmesh").checked, trail: $("trail").checked, camps: $("camps").checked, concol: $("concol").checked,
     view: document.body.dataset.view, chatf: chatFilters(), times: $("chattimes").checked })); } catch {}
 }
-for (const k of ["labels", "names", "zfilter", "follow", "navmesh", "trail", "concol"]) if (k in prefs) $(k).checked = prefs[k];
+for (const k of ["labels", "names", "zfilter", "follow", "navmesh", "trail", "camps", "concol"]) if (k in prefs) $(k).checked = prefs[k];
 
 // how a level cons to us: EQEmu's Mob::GetLevelCon (the SoF+ system, the server's default)
 const CON_NAMES = { gray: "grey", green: "green", lblue: "light blue", blue: "blue", white: "white", yellow: "yellow", red: "red" };
@@ -342,6 +343,43 @@ function drawTrail() {
   ctx.globalAlpha = 1;
 }
 
+// the camps: the zone's named hunting areas (the guild's maps answer /camps; a plain viewer doesn't, and the box stays hidden)
+let campsData = null, hoveredId = 0, hoveredCamp = null;
+const CAMP_R = 250;  // the camp soldier's pull radius, game units
+async function loadCamps() {
+  try {
+    const r = await fetch("camps");
+    if (!r.ok) return;
+    $("campsbox").style.display = "";
+    campsData = await r.json();
+    draw();
+  } catch (e) { /* no camps here */ }
+}
+$("camps").addEventListener("change", () => { try { save(); } catch (e) {} draw(); });
+setInterval(loadCamps, 10000); loadCamps();
+const niceName = n => String(n || "").replace(/_/g, " ").replace(/^#/, "").replace(/\d+$/, "").trim();
+function drawCamps() {
+  if (!$("camps").checked || !campsData || !state || !state.connected || campsData.zone !== state.zone) return;
+  ctx.textBaseline = "middle"; ctx.font = "600 11px system-ui, sans-serif";
+  for (const c of campsData.camps) {
+    const [sx, sy] = toScreen(-c.x, -c.y), rr = CAMP_R * view.scale, mine = c.holders.includes(campsData.mine), held = c.holders.length > 0;
+    if (sx < -rr - 120 || sx > canvas.clientWidth + rr + 120 || sy < -rr - 20 || sy > canvas.clientHeight + rr + 20) continue;
+    const col = mine ? "#d9a441" : held ? "#5aa0e0" : "#9aa4b2";
+    ctx.globalAlpha = c === hoveredCamp ? 1 : mine ? 0.95 : 0.7;
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = mine || c === hoveredCamp ? 3 : 1.5; ctx.setLineDash(held ? [] : [6, 5]);
+    ctx.beginPath(); ctx.arc(sx, sy, Math.max(rr, 4), 0, 7); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = mine ? 0.12 : 0.05; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(sx, sy, 3, 0, 7); ctx.fill();
+    if (mine || held || c === hoveredCamp || view.scale > 0.07) {
+      const text = c.name + (held ? "  ·  " + c.holders.join(", ") : "");
+      const tw = ctx.measureText(text).width;
+      ctx.fillStyle = css("--bg"); ctx.globalAlpha = 0.75; ctx.fillRect(sx - tw / 2 - 3, sy + 7, tw + 6, 15); ctx.globalAlpha = 1;
+      ctx.fillStyle = col; ctx.textAlign = "center"; ctx.fillText(text, sx, sy + 15); ctx.textAlign = "start";
+    }
+  }
+  ctx.setLineDash([]); ctx.globalAlpha = 1;
+}
+
 function draw() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   ctx.fillStyle = css("--bg"); ctx.fillRect(0, 0, w, h);
@@ -350,6 +388,7 @@ function draw() {
   const inZ = z => !zw || (z >= zw[0] && z <= zw[1]);
   const [vx0, vy0] = toMap(0, 0), [vx1, vy1] = toMap(w, h);
   drawNav(zw, w, h);
+  drawCamps();
   drawTrail();
 
   // map lines, batched by colour and by in/out of the height window
@@ -412,6 +451,7 @@ function draw() {
       if (byCon) { ctx.strokeStyle = outline; ctx.lineWidth = 1; ctx.stroke(); }  // white and yellow on a light map
     }
     if (s.ai) { ctx.strokeStyle = css("--me"); ctx.lineWidth = 2; shape(s, sx, sy, r + 3); ctx.stroke(); }
+    if (s.id === hoveredId) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; shape(s, sx, sy, r + 5); ctx.stroke(); ctx.strokeStyle = "#000"; ctx.lineWidth = 1; shape(s, sx, sy, r + 7); ctx.stroke(); }
     if (s.id === state.me.target) {
       ctx.strokeStyle = css("--target"); ctx.lineWidth = 3; shape(s, sx, sy, r + 6); ctx.stroke();
     }
@@ -602,7 +642,7 @@ canvas.addEventListener("pointerdown", e => {
   canvas.classList.add("drag");
   if (pointers.size === 2) startPinch();
   // a touch has no hover: a tap shows what's under the finger
-  if (e.pointerType !== "mouse") { hover = pointers.size === 1 ? { x: e.clientX, y: e.clientY } : null; showTip(); }
+  if (e.pointerType !== "mouse") { hover = pointers.size === 1 ? { ...onCanvas(e), px: e.clientX, py: e.clientY } : null; showTip(); }
 });
 canvas.addEventListener("pointermove", e => {
   const p = onCanvas(e), last = pointers.get(e.pointerId);
@@ -626,7 +666,7 @@ canvas.addEventListener("pointermove", e => {
       draw();
     }
   }
-  if (e.pointerType === "mouse") { hover = { x: e.clientX, y: e.clientY }; showTip(); }
+  if (e.pointerType === "mouse") { hover = { ...onCanvas(e), px: e.clientX, py: e.clientY }; showTip(); }
 });
 function endPointer(e) {
   pointers.delete(e.pointerId);
@@ -645,18 +685,40 @@ canvas.addEventListener("wheel", e => {
 
 function showTip() {
   const tip = $("tip");
-  if (!hover || !state || !state.connected || pinch || (pointers.size && hover.moved)) { tip.style.display = "none"; return; }
-  let best = null, bestD = 10;
+  const off = () => { tip.style.display = "none"; if (hoveredId || hoveredCamp) { hoveredId = 0; hoveredCamp = null; draw(); } };
+  if (!hover || !state || !state.connected || pinch || (pointers.size && hover.moved)) { off(); return; }
+  // the nearest spawn within a generous reach (the dots are small, and a crowd of them is hard to point at)
+  let best = null, bestD = 16;
   for (const s of state.spawns) {
     const [sx, sy] = toScreen(-s.x, -s.y), d = Math.hypot(sx - hover.x, sy - hover.y);
     if (d < bestD) { best = s; bestD = d; }
   }
-  if (!best) { tip.style.display = "none"; return; }
-  tip.innerHTML = `${conDot(best)}<b>${esc(best.n)}</b> <span class="muted">${best.t} ${best.l}${best.ai ? " · AI" : ""}</span><br>` +
-    `${best.hp}% HP · loc ${best.y.toFixed(0)}, ${best.x.toFixed(0)}, ${best.z.toFixed(0)}`;
+  let camp = null;
+  if (!best && $("camps").checked && campsData && campsData.zone === state.zone) {
+    let cd = 1e9;
+    for (const c of campsData.camps) {
+      const [sx, sy] = toScreen(-c.x, -c.y), d = Math.hypot(sx - hover.x, sy - hover.y);
+      if (d <= Math.max(CAMP_R * view.scale, 10) && d < cd) { camp = c; cd = d; }
+    }
+  }
+  if (!best && !camp) { off(); return; }
+  const id = best ? best.id : 0;
+  if (id !== hoveredId || camp !== hoveredCamp) { hoveredId = id; hoveredCamp = camp; draw(); }
+  if (best) {
+    const kind = { NPC: "NPC", PC: "player", Bot: "bot", Pet: "pet", Corpse: "corpse" }[best.t] || best.t;
+    tip.innerHTML = `${conDot(best)}<b>${esc(niceName(best.n))}</b> <span class="muted">level</span> <b>${best.l}</b> <span class="muted">${kind}${best.ai ? " · AI" : ""}</span><br>` +
+      `${best.hp}% HP · loc ${best.y.toFixed(0)}, ${best.x.toFixed(0)}, ${best.z.toFixed(0)}`;
+  } else {
+    const lv = camp.levels && camp.levels.length ? `level ${camp.levels[0]}${camp.levels[camp.levels.length - 1] !== camp.levels[0] ? "-" + camp.levels[camp.levels.length - 1] : ""}` : "";
+    const mobs = [...new Set((camp.mobs || []).map(niceName))].slice(0, 6).join(", ");
+    tip.innerHTML = `<b>${esc(camp.name)}</b> <span class="muted">${lv}</span><br>` +
+      (mobs ? `${esc(mobs)}<br>` : "") +
+      `<span class="muted">${camp.spawns ? camp.spawns + " spawns · " : ""}${camp.respawn_s ? "respawn " + Math.round(camp.respawn_s / 60) + " min · " : ""}</span>` +
+      (camp.holders.length ? `held by <b>${esc(camp.holders.join(", "))}</b>` : "free");
+  }
   tip.style.display = "block";
-  tip.style.left = Math.min(hover.x + 14, innerWidth - tip.offsetWidth - 8) + "px";
-  tip.style.top = Math.min(hover.y + 14, innerHeight - tip.offsetHeight - 8) + "px";
+  tip.style.left = Math.min(hover.px + 14, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = Math.min(hover.py + 14, innerHeight - tip.offsetHeight - 8) + "px";
 }
 
 $("fit").onclick = fit;
