@@ -50,6 +50,13 @@
   #side .panel { position: static; pointer-events: auto; }
   #legend { display: flex; flex-wrap: wrap; gap: 2px 10px; }
   .panel h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  #enemies .en { margin: 5px 0 2px; cursor: pointer; border-radius: 4px; padding: 1px 3px; } #enemies .en:hover { background: var(--border); }
+  #enemies .en.tgt { outline: 1px solid var(--target, #e6b422); } #enemies .en .who { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+  #enemies .en .on { font-size: 11px; color: var(--muted); } #enemies .en .on b { color: #e0524a; font-weight: 600; }
+  #enemies .bar i { background: linear-gradient(#d9b43a, #98781c); } #enemies .bar { height: 7px; }
+  #enemies .st { display: inline-block; font-size: 10px; font-weight: 700; border-radius: 3px; padding: 0 4px; margin-left: 3px; color: #15110d; }
+  #enemies .st.mez { background: #b07ad6; } #enemies .st.root { background: #6fbf73; } #enemies .st.stun { background: #e0c34c; } #enemies .st.fear { background: #e08a3c; }
+  #enemies .st.charm { background: #4cc2c0; } #enemies .st.cast { background: #e0524a; color: #fff; }
   #group .member { margin: 6px 0 2px; }
   #group .who { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
   #group .who b { font-weight: 600; }
@@ -158,6 +165,7 @@
     <div class="cons" id="conlegend">NPC con <i style="--c: var(--con-gray)"></i><i style="--c: var(--con-green)"></i><i style="--c: var(--con-lblue)"></i><i style="--c: var(--con-blue)"></i><i style="--c: var(--con-white)"></i><i style="--c: var(--con-yellow)"></i><i style="--c: var(--con-red)"></i></div>
   </div>
   <div id="group" class="panel"><h3>Group</h3><div id="members"><span class="muted">&mdash;</span></div></div>
+  <div id="enemies" class="panel" hidden><h3>Enemies <span class="muted" id="encount"></span></h3><div id="enrows"></div></div>
   <div id="plan" class="panel" hidden><h3>Plan</h3><dl id="planrows"></dl></div>
 </div>
 <div id="logview">
@@ -389,6 +397,7 @@ function drawAggro(w, h) {
   }
 }
 setInterval(loadCamps, 10000); loadCamps();
+let aggroedIds = new Set();
 const niceName = n => String(n || "").replace(/_/g, " ").replace(/^#/, "").replace(/\d+$/, "").trim();
 function drawCamps() {
   if (!$("camps").checked || !campsData || !state || !state.connected || campsData.zone !== state.zone) return;
@@ -420,6 +429,7 @@ function draw() {
   const inZ = z => !zw || (z >= zw[0] && z <= zw[1]);
   const [vx0, vy0] = toMap(0, 0), [vx1, vy1] = toMap(w, h);
   drawNav(zw, w, h);
+  aggroedIds = new Set(enemiesOf(state).map(s => s.id));
   drawCamps();
   drawTrail();
   drawAggro(w, h);
@@ -484,6 +494,7 @@ function draw() {
       if (byCon) { ctx.strokeStyle = outline; ctx.lineWidth = 1; ctx.stroke(); }  // white and yellow on a light map
     }
     if (s.ai) { ctx.strokeStyle = css("--me"); ctx.lineWidth = 2; shape(s, sx, sy, r + 3); ctx.stroke(); }
+    if (aggroedIds.has(s.id)) { ctx.strokeStyle = "#e0524a"; ctx.lineWidth = 1.6; shape(s, sx, sy, r + 2); ctx.stroke(); }
     if (s.id === hoveredId) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; shape(s, sx, sy, r + 5); ctx.stroke(); ctx.strokeStyle = "#000"; ctx.lineWidth = 1; shape(s, sx, sy, r + 7); ctx.stroke(); }
     if (s.id === state.me.target) {
       ctx.strokeStyle = css("--target"); ctx.lineWidth = 3; shape(s, sx, sy, r + 6); ctx.stroke();
@@ -538,6 +549,32 @@ function updateStatus() {
 }
 
 const bar = (cls, pct) => `<div class="bar ${cls}"><i style="width:${Math.max(0, Math.min(100, pct || 0))}%"></i></div>`;
+
+// the enemies: what has the group on its hate list, or is hitting one of us (the client's extended target window): health, what is on it, who it is after
+const STATUS = [[1, "mez", "MEZ", "mezzed"], [2, "root", "ROOT", "rooted"], [4, "stun", "STUN", "stunned"], [8, "fear", "FEAR", "feared or fleeing"], [16, "charm", "CHARM", "charmed"]];
+function enemiesOf(st) {
+  if (!st || !st.connected) return [];
+  const mine = new Set([st.me.id, ...(st.group || []).map(g => g.id).filter(Boolean)]), haters = new Set(st.me.haters || []);
+  return st.spawns.filter(s => s.t === "NPC" && s.hp > 0 && (haters.has(s.id) || mine.has(s.tg))).sort((a, b) => (a.hp - b.hp) || (a.id - b.id));
+}
+function renderEnemies(st) {
+  const list = enemiesOf(st), box = $("enemies");
+  box.hidden = !list.length; if (!list.length) return;
+  const names = new Map([[st.me.id, st.me.name], ...(st.group || []).filter(g => g.id).map(g => [g.id, g.name])]);
+  $("encount").textContent = `(${list.length})`;
+  $("enrows").innerHTML = list.slice(0, 24).map(s => {
+    const badges = STATUS.filter(([bit]) => s.st & bit).map(([, c, t, title]) => `<span class="st ${c}" title="${title}">${t}</span>`).join("") +
+      (s.cs ? `<span class="st cast" title="casting spell ${s.cs}">CAST</span>` : "");
+    const on = s.tg && names.has(s.tg) ? `<div class="on">&rarr; ${s.tg === st.me.id ? "<b>" + esc(names.get(s.tg)) + "</b>" : esc(names.get(s.tg))}</div>` : "";
+    return `<div class="en${s.id === st.me.target ? " tgt" : ""}" data-id="${s.id}" title="click to find it on the map"><div class="who"><span>${conDot(s)}<b>${esc(niceName(s.n))}</b>${badges}</span>` +
+      `<span class="muted">${s.l} &middot; ${s.hp}%</span></div>${bar("hp", s.hp)}${on}</div>`;
+  }).join("");
+}
+$("enrows").addEventListener("click", e => {
+  const row = e.target.closest(".en"); if (!row || !state) return;
+  const s = state.spawns.find(x => x.id === +row.dataset.id); if (!s) return;
+  $("follow").checked = false; save(); view.cx = -s.x; view.cy = -s.y; hoveredId = s.id; draw();
+});
 
 function renderGroup(group) {
   if (!group) return;
@@ -642,7 +679,7 @@ function connect() {
     state = JSON.parse(ev.data);
     if (state.connected && state.zone !== zone) { zone = state.zone; await loadMap(); loadNav(); }
     if (state.connected && $("follow").checked) { view.cx = -state.me.x; view.cy = -state.me.y; }
-    updateStatus(); draw(); showTip(); renderGroup(state.group); renderPlan(state.plan); appendLog(state.log); appendChat(state.chat);
+    updateStatus(); draw(); showTip(); renderGroup(state.group); renderEnemies(state); renderPlan(state.plan); appendLog(state.log); appendChat(state.chat);
     if (state.connected) $("where").textContent = `${state.me.name} · ${state.zone_name}`;
     if (state.connected) {
       const b3 = $("to3d"), proxied = /^\/map\/\d+\//.test(location.pathname), ev = proxied ? location.pathname + "events" : location.origin + "/events";
