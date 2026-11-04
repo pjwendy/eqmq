@@ -278,7 +278,7 @@ class MapViewer(MQPlugin):
             "spawns": [
                 {"id": s.ID, "n": s.Name, "t": s.Type, "l": s.Level, "x": round(s.X, 1), "y": round(s.Y, 1),
                  "z": round(s.Z, 1), "h": round(s.Heading), "hp": s.PctHPs, "ai": s.Headless, "r": s.RaceID, "g": s.Gender, "m": s.PctMana, "tg": s.TargetID, "w1": s.Primary, "w2": s.Secondary,
-                 "ar": s.AggroRange, "as": s.AssistRange, "ag": s.Aggro, "st": s.Status, "cs": s.CastingID}
+                 "ar": s.AggroRange, "as": s.AssistRange, "ag": s.Aggro, "st": s.Status, "cs": s.CastingID, "bf": [[b.ID, b.Ticks] for b in s.Buffs] if s.Buffs else 0}
                 for s in bot.Spawns()
             ],
         }
