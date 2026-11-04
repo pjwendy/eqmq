@@ -215,6 +215,23 @@ class MapViewer(MQPlugin):
 
     # ---- state for the page ----
 
+    icon_lookup = None   # set by a host that has the spell data: ids -> {spell id: icon number}
+    _icons: dict = {}
+    ICONS_DIR = os.environ.get("SPELL_ICONS_DIR") or os.path.join(os.path.expanduser("~"), "eq-assets", "spellicons")
+
+    def _buff_rows(self, buffs) -> list:
+        """[name, ticks, spell id, icon] for each buff; the icon is its picture's number on the client's sheets (-1 when unknown)."""
+        rows = [(b.Name, b.Ticks, b.ID) for b in buffs][:40]
+        need = [r[2] for r in rows if r[2] not in self._icons]
+        if need and self.icon_lookup:
+            try:
+                got = self.icon_lookup(need)
+            except Exception:
+                got = {}
+            for i in need:
+                self._icons[i] = got.get(i, -1)
+        return [[n, t, i, self._icons.get(i, -1)] for n, t, i in rows]
+
     def snapshot(self) -> dict:
         bot = self.bot
         me, zone = bot.Me, bot.Zone
@@ -233,13 +250,13 @@ class MapViewer(MQPlugin):
                               "leader": bool(m and m.Leader) or not members, "here": True,
                               "exp": round(me.ExpPct, 1), "aa": round(me.AAExpPct, 1), "aa_points": me.AAPoints,
                               "aa_split": me.AASplit, "has_aa": me.Level >= 51 or me.AAPoints > 0 or me.AAExpPct > 0
-                              or me.AASplit > 0, "buffs": [[b.Name, b.Ticks, b.ID] for b in me.Buffs][:40]})
+                              or me.AASplit > 0, "buffs": self._buff_rows(me.Buffs)})
                 continue
             s = spawns.get(m.ID) if m and m.ID else None
             group.append({"id": s.ID if s else 0, "name": name, "cls": CLASS_SHORT.get(s.ClassID, "?") if s else "?", "level": s.Level if s else 0,
                           "hp": s.PctHPs if s else 0, "mana": s.PctMana if s else 0,
                           "has_mana": bool(s and s.ClassID not in NO_MANA), "leader": bool(m and m.Leader),
-                          "here": s is not None, "buffs": [[b.Name, b.Ticks, b.ID] for b in (m.Buffs if m else ())][:40]})
+                          "here": s is not None, "buffs": self._buff_rows(m.Buffs if m else ())})
         plan = None
         if self.plan:
             try:
@@ -256,7 +273,7 @@ class MapViewer(MQPlugin):
             "zone_name": zone.Name,
             "me": {"id": me.ID, "name": me.Name, "level": me.Level, "x": me.X, "y": me.Y, "z": me.Z, "heading": me.Heading,
                    "target": me.TargetID, "hp": me.PctHPs, "hour": me.GameHour, "race": me.RaceID, "sex": me.Gender,
-                   "mana": me.PctMana, "exp": round(me.ExpPct, 1), "aa": round(me.AAExpPct, 1), "aap": me.AAPoints, "cid": me.ClassID, "buffs": [[b.Name, b.Ticks, b.ID] for b in me.Buffs][:40],
+                   "mana": me.PctMana, "exp": round(me.ExpPct, 1), "aa": round(me.AAExpPct, 1), "aap": me.AAPoints, "cid": me.ClassID, "buffs": self._buff_rows(me.Buffs),
                    "haters": [h if isinstance(h, int) else h.ID for h in me.Haters][:40]},
             "spawns": [
                 {"id": s.ID, "n": s.Name, "t": s.Type, "l": s.Level, "x": round(s.X, 1), "y": round(s.Y, 1),
@@ -278,6 +295,12 @@ class MapViewer(MQPlugin):
             zone = self.bot.Zone
             data = self.maps.get(zone.ShortName) if zone else {"layers": [], "error": "not in a zone"}
             return 200, "application/json", json.dumps(data).encode()
+        if m := re.match(r"^/spellicon/(\d+)\.png$", path):  # (the client's pictures, cut out by tools/spell_icons.py)
+            try:
+                with open(os.path.join(self.ICONS_DIR, m.group(1) + ".png"), "rb") as fh:
+                    return 200, "image/png", fh.read()
+            except OSError:
+                return None
         if path == "/navmesh":
             zone = self.bot.Zone
             data = self.nav.get(zone.ShortName) if zone else {"polys": [], "links": [], "error": "not in a zone"}
