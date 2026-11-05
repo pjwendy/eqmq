@@ -157,7 +157,7 @@
 </style>
 </head>
 <body>
-<div id="viewbar"><span class="tab on">Map</span><button class="tab" id="to3d" title="Watch this character in 3D, as the game draws it (the guild dashboard's player, fed by this map's stream)" hidden>3D</button><span class="where" id="where"></span><!--eqmq:controls--></div>
+<div id="viewbar"><span class="tab on" title="The map, flat">2D</span><button class="tab" id="to3d" title="Watch this character in 3D, as the game draws it (the guild dashboard's player, fed by this map's stream)" hidden>3D</button><span class="where" id="where"></span><!--eqmq:controls--></div>
 <canvas id="map"></canvas>
 <div id="controls" class="panel">
   <button id="fit" title="Fit the whole zone">Fit</button>
@@ -220,7 +220,7 @@ function save() {
   try { localStorage.setItem("eqmq-viewer", JSON.stringify({
     labels: $("labels").checked, names: $("names").checked, zfilter: $("zfilter").checked, zrange: $("zrange").value,
     follow: $("follow").checked, navmesh: $("navmesh").checked, trail: $("trail").checked, camps: $("camps").checked, aggro: $("aggro").checked, concol: $("concol").checked,
-    chatf: chatFilters(), times: $("chattimes").checked, showlog: $("showlog").checked })); } catch {}
+    chatf: chatFilters(), times: $("chattimes").checked, showlog: $("showlog").checked, layers: prefs.layers || {} })); } catch {}
 }
 for (const k of ["labels", "names", "zfilter", "follow", "navmesh", "trail", "camps", "aggro", "concol"]) if (k in prefs) $(k).checked = prefs[k];
 
@@ -269,10 +269,16 @@ function fit() {
 
 async function loadMap() {
   const r = await fetch("map"); map = await r.json();
-  layerOn = map.layers.map(() => true);
+  // the base layer only, to start with (the operator, 5 Nov: layers 1-3 are labels and clutter); what's turned on or off since is kept
+  const want = prefs.layers || {};
+  layerOn = map.layers.map((l, i) => l.name in want ? !!want[l.name] : i === 0);
   $("layers").innerHTML = map.layers.map((l, i) =>
-    `<label><input type="checkbox" data-layer="${i}" checked> ${l.name}</label>`).join(" ");
-  $("layers").querySelectorAll("input").forEach(el => el.onchange = () => { layerOn[+el.dataset.layer] = el.checked; draw(); });
+    `<label><input type="checkbox" data-layer="${i}"${layerOn[i] ? " checked" : ""}> ${l.name}</label>`).join(" ");
+  $("layers").querySelectorAll("input").forEach(el => el.onchange = () => {
+    layerOn[+el.dataset.layer] = el.checked;
+    prefs.layers = Object.assign(prefs.layers || {}, { [map.layers[+el.dataset.layer].name]: el.checked });
+    save(); draw();
+  });
   $("error").style.display = map.error ? "block" : "none";
   $("error").textContent = map.error ? map.error + ". Set EQMQ_MAPS to the client's maps folder." : "";
   const following = $("follow").checked;
