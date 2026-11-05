@@ -47,7 +47,7 @@
   #status b { font-weight: 600; }
   #side { position: absolute; top: 46px; right: 12px; bottom: 56px; width: 270px; display: flex;
     flex-direction: column; gap: 8px; pointer-events: none; }
-  #side .panel { position: static; pointer-events: auto; }
+  #side .panel { position: relative; pointer-events: auto; }
   #legend { display: flex; flex-wrap: wrap; gap: 2px 10px; }
   .panel h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   #enemies .en { margin: 5px 0 2px; cursor: pointer; border-radius: 4px; padding: 1px 3px; } #enemies .en:hover { background: var(--border); }
@@ -99,18 +99,25 @@
   #tip { position: absolute; pointer-events: none; display: none; white-space: nowrap; }
   #error { top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; max-width: 80%; }
   .muted { color: var(--muted); }
-  /* the tabs: the map, or the log and chat, under a bar of their own (the toolbar extras go in the bar) */
+  /* the bar over the map (the toolbar extras go in it) */
   #viewbar { position: absolute; top: 0; left: 0; right: 0; height: 34px; display: flex; align-items: center; gap: 6px;
     padding: 0 8px; background: var(--panel); border-bottom: 1px solid var(--border); z-index: 5; overflow-x: auto; white-space: nowrap; }
   #viewbar .tab { padding: 4px 14px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; }
   #viewbar .tab.on { background: var(--text); color: var(--bg); font-weight: 600; }
   #viewbar .where { color: var(--muted); margin: 0 8px 0 4px; }
-  #logview { display: none; position: absolute; top: 34px; left: 0; right: 0; bottom: 0; gap: 8px; padding: 8px; box-sizing: border-box; }
-  body[data-view="log"] #logview { display: flex; }
-  body[data-view="log"] canvas, body[data-view="log"] #controls, body[data-view="log"] #side, body[data-view="log"] #status,
-  body[data-view="log"] #tip { display: none !important; }
-  .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
-  #chatbox { flex: 3; } #actbox { flex: 1.2; min-width: 240px; }
+  /* the chat and the log, in a panel over the map: chat above, the log below (either can be turned off); resized from its corner */
+  #chatpanel { left: 12px; bottom: 64px; width: min(560px, calc(100% - 330px)); height: 34vh; min-width: 260px; min-height: 120px;
+    display: flex; flex-direction: column; gap: 6px; resize: both; overflow: hidden; box-sizing: border-box; }
+  #chatpanel.nolog #actbox, #chatpanel.nochat #chatbox { display: none; }
+  #chatbox { flex: 3; display: flex; flex-direction: column; min-height: 0; } #actbox { flex: 1.4; display: flex; flex-direction: column; min-height: 0; }
+  /* every panel can be moved: by its grip (or its heading); where it was put is kept in this browser, as a fraction of the window */
+  .panel .grip { position: absolute; top: 2px; right: 3px; width: 16px; height: 16px; cursor: move; touch-action: none; color: var(--muted);
+    font: 12px/16px sans-serif; text-align: center; border-radius: 3px; user-select: none; opacity: .55; z-index: 1; }
+  .panel .grip:hover { opacity: 1; background: var(--border); }
+  .panel h3 { cursor: move; touch-action: none; user-select: none; }
+  .panel.moved { position: fixed !important; right: auto !important; bottom: auto !important; transform: none !important; z-index: 4; }
+  .panel.dragging { box-shadow: 0 0 0 2px var(--me), 0 2px 8px #0003; z-index: 6; }
+  #controls, #status, #legend { padding-right: 24px; }
   .panehead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 6px; }
   .panehead h3 { margin: 0; }
   .panehead label { font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -136,14 +143,17 @@
     #side #tabs { display: flex; gap: 6px; flex: none; padding: 6px; }
     #side > .panel:not(#tabs) { display: none; }
     body[data-tab="group"] #side > #group, body[data-tab="plan"] #side > #plan { display: block !important; flex: 1; overflow-y: auto; }
-    body[data-view="log"] #logview { flex-direction: column; }
-    #chatbox { flex: 2; } #actbox { flex: 1; min-width: 0; }
+    /* the chat is the sheet's third tab; nothing is moved on a phone */
+    #chatpanel { display: none; position: fixed !important; top: auto !important; left: 8px !important; right: 8px; bottom: 8px !important;
+      width: auto !important; height: calc(60vh - 52px) !important; resize: none; z-index: 4; }
+    body.sheet[data-tab="chat"] #chatpanel { display: flex; } body.sheet[data-tab="chat"] #side { height: 46px; bottom: calc(60vh - 40px); }
+    .panel .grip { display: none; } .panel.moved { position: absolute !important; } #side .panel.moved { position: static !important; }
     #controls { top: 42px; left: 8px; max-width: calc(100% - 16px); }
   }
 </style>
 </head>
 <body>
-<div id="viewbar"><button class="tab on" data-view="map">Map</button><button class="tab" data-view="log">Log &amp; chat</button><button class="tab" id="to3d" title="Watch this character in 3D, as the game draws it (the guild dashboard's player, fed by this map's stream)" hidden>3D</button><span class="where" id="where"></span><!--eqmq:controls--></div>
+<div id="viewbar"><span class="tab on">Map</span><button class="tab" id="to3d" title="Watch this character in 3D, as the game draws it (the guild dashboard's player, fed by this map's stream)" hidden>3D</button><span class="where" id="where"></span><!--eqmq:controls--></div>
 <canvas id="map"></canvas>
 <div id="controls" class="panel">
   <button id="fit" title="Fit the whole zone">Fit</button>
@@ -161,7 +171,7 @@
   <input type="text" id="filter" placeholder="Find spawn…">
 </div>
 <div id="side">
-  <div id="tabs" class="panel"><button data-tab="group">Group</button><button data-tab="plan">Plan</button></div>
+  <div id="tabs" class="panel"><button data-tab="group">Group</button><button data-tab="plan">Plan</button><button data-tab="chat">Chat</button></div>
   <div id="legend" class="panel">
     <span style="--c: var(--me)">You</span><span class="sq" style="--c: var(--pc)">Player</span><span class="sq" style="--c: var(--bot)">Bot</span>
     <span style="--c: var(--npc)">NPC</span><span style="--c: var(--pet)">Pet</span><span style="--c: var(--corpse)">Corpse</span>
@@ -171,15 +181,15 @@
   <div id="enemies" class="panel" hidden><h3>Enemies <span class="muted" id="encount"></span></h3><div id="enrows"></div></div>
   <div id="plan" class="panel" hidden><h3>Plan</h3><dl id="planrows"></dl></div>
 </div>
-<div id="logview">
-  <div id="chatbox" class="pane">
+<div id="chatpanel" class="panel">
+  <div id="chatbox">
     <div class="panehead"><h3>Chat</h3>
       <label><input type="checkbox" data-f="chat" checked> Chat</label><label><input type="checkbox" data-f="combat" checked> Combat</label>
       <label><input type="checkbox" data-f="spells" checked> Spells</label><label><input type="checkbox" data-f="loot" checked> Loot &amp; coin</label>
-      <label><input type="checkbox" data-f="other" checked> Other</label><label><input type="checkbox" id="chattimes"> Times</label></div>
+      <label><input type="checkbox" data-f="other" checked> Other</label><label><input type="checkbox" id="chattimes"> Times</label><label title="The runner's log of what this character did, under the chat"><input type="checkbox" id="showlog" checked> Log</label></div>
     <div id="chatwin"></div>
   </div>
-  <div id="actbox" class="pane"><div class="panehead"><h3>Log</h3></div><div id="entries"></div></div>
+  <div id="actbox"><div class="panehead"><h3>Log</h3></div><div id="entries"></div></div>
 </div>
 <div id="status" class="panel"><span class="muted">Connecting…</span></div>
 <div id="tip" class="panel"></div>
@@ -206,7 +216,7 @@ function save() {
   try { localStorage.setItem("eqmq-viewer", JSON.stringify({
     labels: $("labels").checked, names: $("names").checked, zfilter: $("zfilter").checked, zrange: $("zrange").value,
     follow: $("follow").checked, navmesh: $("navmesh").checked, trail: $("trail").checked, camps: $("camps").checked, aggro: $("aggro").checked, concol: $("concol").checked,
-    view: document.body.dataset.view, chatf: chatFilters(), times: $("chattimes").checked })); } catch {}
+    chatf: chatFilters(), times: $("chattimes").checked, showlog: $("showlog").checked })); } catch {}
 }
 for (const k of ["labels", "names", "zfilter", "follow", "navmesh", "trail", "camps", "aggro", "concol"]) if (k in prefs) $(k).checked = prefs[k];
 
@@ -230,13 +240,14 @@ function resize() {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.clientWidth * dpr; canvas.height = canvas.clientHeight * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (needFit && canvas.clientWidth && canvas.clientHeight) { needFit = false; const following = $("follow").checked; fit(); $("follow").checked = following; }
   draw();
 }
 
 const toScreen = (mx, my) => [(mx - view.cx) * view.scale + canvas.clientWidth / 2, (my - view.cy) * view.scale + canvas.clientHeight / 2];
 const toMap = (sx, sy) => [(sx - canvas.clientWidth / 2) / view.scale + view.cx, (sy - canvas.clientHeight / 2) / view.scale + view.cy];
 
-let needFit = false;  // a fit asked for while the map's tab was hidden (no size to fit to): done when it's shown
+let needFit = false;  // a fit asked for before the map had a size: done on the next resize
 function fit() {
   if (!map || !map.layers.length) return;
   if (!canvas.clientWidth || !canvas.clientHeight) { needFit = true; return; }
@@ -636,33 +647,83 @@ function appendChat(entries) {
   while (win.children.length > 1500) win.removeChild(win.firstChild);
   if (atBottom) win.scrollTop = win.scrollHeight;
 }
-function setView(v) {
-  document.body.dataset.view = v;
-  for (const b of document.querySelectorAll("#viewbar .tab")) b.classList.toggle("on", b.dataset.view === v);
-  if (v === "map") requestAnimationFrame(() => {
-    resize();
-    if (needFit || !(view.scale > 0) || !isFinite(view.scale)) {  // (loaded, or zoned, while the log was showing)
-      needFit = false;
-      const following = $("follow").checked;
-      fit();
-      $("follow").checked = following;
-    }
-    draw();
-  });
-  else { const w = $("chatwin"); w.scrollTop = w.scrollHeight; const a = $("entries"); a.scrollTop = a.scrollHeight; }
-  save();
-}
-for (const b of document.querySelectorAll("#viewbar .tab")) b.onclick = () => setView(b.dataset.view);
 for (const b of document.querySelectorAll("#chatbox [data-f], #chattimes")) b.onchange = () => { applyChatFilters(); save(); };
 if (prefs.chatf) for (const b of document.querySelectorAll("#chatbox [data-f]")) if (b.dataset.f in prefs.chatf) b.checked = prefs.chatf[b.dataset.f];
 $("chattimes").checked = !!prefs.times;
+if ("showlog" in prefs) $("showlog").checked = !!prefs.showlog;
+const applyShowLog = () => $("chatpanel").classList.toggle("nolog", !$("showlog").checked);
+$("showlog").onchange = () => { applyShowLog(); save(); };
+applyShowLog();
 applyChatFilters();
-{ // (the tab it was left on)
-  const want = new URLSearchParams(location.search).get("v");  // (?v=log: a link from the 3D view's toolbar)
-  const v = want === "log" || (want !== "map" && prefs.view === "log") ? "log" : "map";
-  document.body.dataset.view = v;
-  for (const b of document.querySelectorAll("#viewbar .tab")) b.classList.toggle("on", b.dataset.view === v);
+
+// ---- every panel can be moved, as the 3D view's windows: dragged by its grip (or its heading), put where it was left (a fraction of
+// the window, so a resize keeps it), the chat's size too; remembered in this browser. A double-click on the grip puts it back.
+const PKEY = "eqmq-viewer-panels.v1", PIDS = ["controls", "legend", "group", "enemies", "plan", "chatpanel", "status"];
+let PS = {}; try { PS = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; } catch { PS = {}; }
+const savePanels = () => { try { localStorage.setItem(PKEY, JSON.stringify(PS)); } catch {} };
+const phone = () => matchMedia("(max-width: 700px)").matches;
+const TOP = 34;  // (the bar)
+function applyPanels() {
+  const W = innerWidth, H = innerHeight;
+  for (const id of PIDS) {
+    const el = $(id), st = PS[id] || {};
+    if (!el) continue;
+    if (st.x != null && !phone()) {
+      el.classList.add("moved");
+      const w = el.offsetWidth || 120, h = el.offsetHeight || 30;
+      el.style.left = Math.max(0, Math.min(W - Math.min(w, 60), st.x * W)) + "px";
+      el.style.top = Math.max(TOP, Math.min(H - Math.min(h, 24), st.y * H)) + "px";
+      if (id === "status") el.style.maxWidth = "calc(100% - 24px)";
+    } else {
+      el.classList.remove("moved"); el.style.left = el.style.top = "";
+    }
+    if (id === "chatpanel" && st.w && !phone()) { el.style.width = st.w + "px"; el.style.height = st.h + "px"; }
+    else if (id === "chatpanel") { el.style.width = el.style.height = ""; }
+  }
 }
+for (const id of PIDS) {
+  const el = $(id);
+  if (!el) continue;
+  const g = document.createElement("span");
+  g.className = "grip"; g.textContent = "\u2725"; g.title = "Drag to move (double-click: back where it was)";
+  el.appendChild(g);
+  g.addEventListener("dblclick", () => { delete PS[id]; savePanels(); applyPanels(); });
+}
+let panelDrag = null;
+document.addEventListener("pointerdown", e => {
+  if (phone()) return;
+  const handle = e.target.closest(".panel .grip, .panel h3");
+  const el = handle && handle.closest(".panel");
+  if (!el || !PIDS.includes(el.id)) return;
+  const r = el.getBoundingClientRect();
+  // (out of #side's column on its first move: fixed where it stands, so nothing jumps)
+  el.classList.add("moved", "dragging"); el.style.left = r.left + "px"; el.style.top = r.top + "px";
+  if (el.id === "status") el.style.maxWidth = "calc(100% - 24px)";
+  panelDrag = { el, dx: e.clientX - r.left, dy: e.clientY - r.top };
+  handle.setPointerCapture(e.pointerId); e.preventDefault();
+});
+document.addEventListener("pointermove", e => {
+  if (!panelDrag) return;
+  const { el, dx, dy } = panelDrag, w = el.offsetWidth, h = el.offsetHeight;
+  const x = Math.max(0, Math.min(innerWidth - w, e.clientX - dx)), y = Math.max(TOP, Math.min(innerHeight - Math.min(h, 40), e.clientY - dy));
+  el.style.left = x + "px"; el.style.top = y + "px";
+  PS[el.id] = Object.assign(PS[el.id] || {}, { x: x / innerWidth, y: y / innerHeight });
+});
+const endPanelDrag = () => { if (panelDrag) { panelDrag.el.classList.remove("dragging"); panelDrag = null; savePanels(); } };
+document.addEventListener("pointerup", endPanelDrag); document.addEventListener("pointercancel", endPanelDrag);
+// the chat's size, once it has been resized by its corner (the browser's own resize handle)
+{
+  const cp = $("chatpanel"); let was = null;
+  cp.addEventListener("pointerdown", () => { was = [cp.offsetWidth, cp.offsetHeight]; });
+  addEventListener("pointerup", () => {
+    if (!was || phone()) { was = null; return; }
+    if (was[0] !== cp.offsetWidth || was[1] !== cp.offsetHeight) { PS.chatpanel = Object.assign(PS.chatpanel || {}, { w: cp.offsetWidth, h: cp.offsetHeight }); savePanels(); }
+    was = null;
+  });
+}
+applyPanels();
+addEventListener("resize", applyPanels);
+{ const w = $("chatwin"); w.scrollTop = w.scrollHeight; }
 
 let lastLog = 0;
 function appendLog(entries) {
@@ -814,8 +875,9 @@ function showTab(tab) {
   try { localStorage.setItem("eqmq-viewer-tab", tab); } catch {}
 }
 for (const b of document.querySelectorAll("#tabs button")) b.onclick = () => showTab(b.dataset.tab);
-let savedTab = "log";
-try { savedTab = localStorage.getItem("eqmq-viewer-tab") || "log"; } catch {}
+let savedTab = "group";
+try { savedTab = localStorage.getItem("eqmq-viewer-tab") || "group"; } catch {}
+if (!["group", "plan", "chat"].includes(savedTab)) savedTab = "group";
 showTab(savedTab);
 for (const id of ["labels", "names", "zfilter", "zrange", "follow", "concol"]) $(id).addEventListener("change", () => { save(); draw(); });
 $("filter").addEventListener("input", draw);
