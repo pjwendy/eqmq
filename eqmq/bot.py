@@ -799,9 +799,12 @@ class Bot:
         cmd.buy.quantity = quantity
         return await self.command(cmd)
 
-    async def give(self, npc: Spawn | int, item: Item | int, quantity: int = 0) -> CommandResult:
+    async def give(self, npc: Spawn | int, item: Item | int, quantity: int = 0,
+                   more: list[tuple[Item | int, int]] | None = None) -> CommandResult:
         """Hand an item from your inventory (all of a stack by default) to an NPC beside you, as the trade
-        window does: its script takes it (a quest's hand-in). Not while it's fighting."""
+        window does: its script takes it (a quest's hand-in). Not while it's fighting. more: further
+        (item or slot, quantity) in the same trade, up to seven (a hand-in of several: the script looks at
+        the whole trade)."""
         slot = item if isinstance(item, int) else item.Slot
         if slot != CURSOR_SLOT:
             # the trade window takes only what's on the cursor (the server kicks a client that moves anything else
@@ -817,6 +820,10 @@ class Bot:
         cmd.give.npc_id = npc if isinstance(npc, int) else npc.ID
         cmd.give.slot = slot
         cmd.give.quantity = quantity
+        for it, q in (more or [])[:7]:
+            m = cmd.give.more.add()
+            m.slot = it if isinstance(it, int) else it.Slot
+            m.quantity = q
         return await self.command(cmd)
 
     async def sell(self, npc: Spawn | int, item: Item | int, quantity: int = 0) -> CommandResult:
