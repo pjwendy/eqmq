@@ -47,7 +47,11 @@
   #status b { font-weight: 600; }
   #side { position: absolute; top: 46px; right: 12px; bottom: 56px; width: 270px; display: flex;
     flex-direction: column; gap: 8px; pointer-events: none; }
-  #side .panel { position: relative; pointer-events: auto; }
+  #side .panel { position: relative; pointer-events: auto; flex: none; }
+  /* the column fits the window: the group (six members with their buffs, the tallest) and the enemies shrink and scroll, so the
+     plan (the General's orders) is always all there below them */
+  #side #group, #side #enemies { flex: 0 1 auto; min-height: 60px; overflow-y: auto; }
+  #side #plan { max-height: 45%; overflow-y: auto; }
   #legend { display: flex; flex-wrap: wrap; gap: 2px 10px; }
   .panel h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   #enemies .en { margin: 5px 0 2px; cursor: pointer; border-radius: 4px; padding: 1px 3px; } #enemies .en:hover { background: var(--border); }
