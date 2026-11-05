@@ -826,6 +826,15 @@ class Bot:
             m.quantity = q
         return await self.command(cmd)
 
+    async def bank_coin(self, copper: int, to_bank: bool = True) -> CommandResult:
+        """Coin between what you carry and your bank, beside a banker, as the bank window does: this much in copper's worth (platinum
+        first, then gold, silver and copper; a withdrawal rounds up in a bigger coin when the smaller don't make it up). Me.BankMoney
+        is what's in the bank."""
+        cmd = pb.Command()
+        cmd.coin.to_bank = to_bank
+        cmd.coin.copper = max(0, int(copper))
+        return await self.command(cmd)
+
     async def sell(self, npc: Spawn | int, item: Item | int, quantity: int = 0) -> CommandResult:
         """Sell an item from your inventory (all of a stack by default) to an open merchant."""
         cmd = pb.Command()
