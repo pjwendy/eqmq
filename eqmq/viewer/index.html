@@ -98,6 +98,7 @@
   #legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%;
     margin-right: 6px; background: var(--c); vertical-align: -1px; }
   #legend span.sq::before { border-radius: 1px; }
+  #legend span.tri::before { border-radius: 0; width: 10px; height: 9px; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
   #legend .cons { flex-basis: 100%; display: flex; gap: 3px; align-items: center; color: var(--muted); font-size: 11px; }
   #legend .cons i { width: 14px; height: 9px; border-radius: 2px; background: var(--c); box-shadow: 0 0 0 1px var(--outline); }
   #tip { position: absolute; pointer-events: none; display: none; white-space: nowrap; }
@@ -178,7 +179,7 @@
   <div id="tabs" class="panel"><button data-tab="group">Group</button><button data-tab="plan">Plan</button><button data-tab="chat">Chat</button></div>
   <div id="legend" class="panel">
     <span style="--c: var(--me)">You</span><span class="sq" style="--c: var(--pc)">Player</span><span class="sq" style="--c: var(--bot)">Bot</span>
-    <span style="--c: var(--npc)">NPC</span><span style="--c: var(--pet)">Pet</span><span style="--c: var(--corpse)">Corpse</span>
+    <span style="--c: var(--npc)">NPC</span><span class="tri" style="--c: var(--pet)">Pet</span><span style="--c: var(--corpse)">Corpse</span>
     <div class="cons" id="conlegend">NPC con <i style="--c: var(--con-gray)"></i><i style="--c: var(--con-green)"></i><i style="--c: var(--con-lblue)"></i><i style="--c: var(--con-blue)"></i><i style="--c: var(--con-white)"></i><i style="--c: var(--con-yellow)"></i><i style="--c: var(--con-red)"></i></div>
   </div>
   <div id="group" class="panel"><h3>Group</h3><div id="members"><span class="muted">&mdash;</span></div></div>
@@ -495,10 +496,11 @@ function draw() {
   const showNames = $("names").checked, conCol = $("concol").checked && state.me.level > 0;
   const outline = css("--outline");
   ctx.font = "11px system-ui, sans-serif"; ctx.textBaseline = "middle";
-  // players and bots are squares, NPCs and pets circles, corpses crosses
+  // players and bots are squares, NPCs circles, pets triangles (a circle, they passed for mobs: the operator, 5 Nov), corpses crosses
   const shape = (s, sx, sy, r) => {
     ctx.beginPath();
     if (s.t === "PC" || s.t === "Bot") ctx.rect(sx - r, sy - r, 2 * r, 2 * r);
+    else if (s.t === "Pet") { const k = r * 1.35; ctx.moveTo(sx, sy - k); ctx.lineTo(sx + k * 0.95, sy + k * 0.7); ctx.lineTo(sx - k * 0.95, sy + k * 0.7); ctx.closePath(); }
     else ctx.arc(sx, sy, r, 0, 7);
   };
   for (const s of state.spawns) {
