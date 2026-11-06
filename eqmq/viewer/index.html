@@ -122,6 +122,9 @@
   .panel h3 { cursor: move; touch-action: none; user-select: none; }
   .panel.moved { position: fixed !important; right: auto !important; bottom: auto !important; transform: none !important; z-index: 4; }
   .panel.dragging { box-shadow: 0 0 0 2px var(--me), 0 2px 8px #0003; z-index: 6; }
+  /* every window can be resized by its bottom right corner (and keeps the size, in this browser) */
+  #group, #enemies, #plan, #legend, #chatpanel { resize: both; overflow: auto; min-width: 140px; min-height: 48px; box-sizing: border-box; }
+  .panel.sized { flex: none !important; max-height: none !important; }
   #controls, #status, #legend { padding-right: 24px; }
   /* every panel can be minimised to its name (the operator, 6 Nov): the button beside its grip; kept in this browser */
   .panel .pmin { position: absolute; top: 2px; right: 21px; width: 16px; height: 16px; cursor: pointer; color: var(--muted); font: 700 13px/16px sans-serif;
@@ -160,7 +163,7 @@
     #chatpanel { display: none; position: fixed !important; top: auto !important; left: 8px !important; right: 8px; bottom: 8px !important;
       width: auto !important; height: calc(60vh - 52px) !important; resize: none; z-index: 4; }
     body.sheet[data-tab="chat"] #chatpanel { display: flex; } body.sheet[data-tab="chat"] #side { height: 46px; bottom: calc(60vh - 40px); }
-    .panel .grip { display: none; } .panel.moved { position: absolute !important; } #side .panel.moved { position: static !important; }
+    #group, #enemies, #plan, #legend { resize: none; } .panel .grip { display: none; } .panel.moved { position: absolute !important; } #side .panel.moved { position: static !important; }
     #controls { top: 42px; left: 8px; max-width: calc(100% - 16px); }
   }
 </style>
@@ -684,6 +687,7 @@ let PS = {}; try { PS = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; } 
 const savePanels = () => { try { localStorage.setItem(PKEY, JSON.stringify(PS)); } catch {} };
 const phone = () => matchMedia("(max-width: 700px)").matches;
 const TOP = 34;  // (the bar)
+const SIZABLE = ["group", "enemies", "plan", "legend", "chatpanel"];  // the windows that can be resized
 function applyPanels() {
   const W = innerWidth, H = innerHeight;
   for (const id of PIDS) {
@@ -699,9 +703,9 @@ function applyPanels() {
       el.classList.remove("moved"); el.style.left = el.style.top = "";
     }
     el.classList.toggle("collapsed", !!st.min);
-    const mb = el.querySelector(":scope > .pmin"); if (mb) { mb.textContent = st.min ? "+" : "\u2212"; mb.title = st.min ? "Open" : "Minimise"; }
-    if (id === "chatpanel" && st.w && !phone()) { el.style.width = st.w + "px"; el.style.height = st.h + "px"; }
-    else if (id === "chatpanel") { el.style.width = el.style.height = ""; }
+    const mb = el.querySelector(":scope > .pmin"); if (mb) { mb.textContent = st.min ? "+" : "−"; mb.title = st.min ? "Open" : "Minimise"; }
+    if (SIZABLE.includes(id) && st.w && !phone()) { el.style.width = st.w + "px"; el.style.height = st.h + "px"; el.classList.add("sized"); }
+    else if (SIZABLE.includes(id)) { el.style.width = el.style.height = ""; el.classList.remove("sized"); }
   }
 }
 for (const id of PIDS) {
@@ -740,14 +744,25 @@ document.addEventListener("pointermove", e => {
 });
 const endPanelDrag = () => { if (panelDrag) { panelDrag.el.classList.remove("dragging"); panelDrag = null; savePanels(); } };
 document.addEventListener("pointerup", endPanelDrag); document.addEventListener("pointercancel", endPanelDrag);
-// the chat's size, once it has been resized by its corner (the browser's own resize handle)
+// a window's size, once it has been resized by its corner (the browser's own resize handle): kept, and the window put where it stands (out of the side
+// column, which is only so wide)
 {
-  const cp = $("chatpanel"); let was = null;
-  cp.addEventListener("pointerdown", () => { was = [cp.offsetWidth, cp.offsetHeight]; });
+  let was = null;
+  document.addEventListener("pointerdown", e => {
+    if (phone()) return;
+    const el = e.target.closest && e.target.closest(".panel");
+    if (!el || !SIZABLE.includes(el.id)) return;
+    const r = el.getBoundingClientRect();
+    was = (e.clientX > r.right - 20 && e.clientY > r.bottom - 20) ? { el, w: el.offsetWidth, h: el.offsetHeight } : null;
+  }, true);
   addEventListener("pointerup", () => {
     if (!was || phone()) { was = null; return; }
-    if (was[0] !== cp.offsetWidth || was[1] !== cp.offsetHeight) { PS.chatpanel = Object.assign(PS.chatpanel || {}, { w: cp.offsetWidth, h: cp.offsetHeight }); savePanels(); }
-    was = null;
+    const { el } = was, changed = was.w !== el.offsetWidth || was.h !== el.offsetHeight; was = null;
+    if (!changed) return;
+    const r = el.getBoundingClientRect();
+    if (!el.classList.contains("moved")) { el.classList.add("moved"); el.style.left = r.left + "px"; el.style.top = r.top + "px"; PS[el.id] = Object.assign(PS[el.id] || {}, { x: r.left / innerWidth, y: r.top / innerHeight }); }
+    el.classList.add("sized");
+    PS[el.id] = Object.assign(PS[el.id] || {}, { w: el.offsetWidth, h: el.offsetHeight }); savePanels();
   });
 }
 applyPanels();
