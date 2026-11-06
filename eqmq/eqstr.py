@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import re
 
-_PLACEHOLDER = re.compile(r"%(\d)")
+_PLACEHOLDER = re.compile(r"%(T?)(\d)")  # %2: the second argument; %T2: the second argument is the id of another string (a merchant's greeting: "Caden Zharik says '%T2'")
 
 
 class EqStr:
@@ -36,7 +36,10 @@ class EqStr:
             return f"[eqstr {string_id}] " + " ".join(args) if args else f"[eqstr {string_id}]"
 
         def sub(m: re.Match) -> str:
-            n = int(m.group(1)) - 1
-            return args[n] if 0 <= n < len(args) else ""
+            n = int(m.group(2)) - 1
+            value = args[n] if 0 <= n < len(args) else ""
+            if m.group(1) and value.isdigit() and int(value) in self.strings:  # (another string, with the arguments after this one)
+                return self.format(int(value), args[n + 1:])
+            return value
 
         return _PLACEHOLDER.sub(sub, template)
