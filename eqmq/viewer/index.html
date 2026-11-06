@@ -123,6 +123,14 @@
   .panel.moved { position: fixed !important; right: auto !important; bottom: auto !important; transform: none !important; z-index: 4; }
   .panel.dragging { box-shadow: 0 0 0 2px var(--me), 0 2px 8px #0003; z-index: 6; }
   #controls, #status, #legend { padding-right: 24px; }
+  /* every panel can be minimised to its name (the operator, 6 Nov): the button beside its grip; kept in this browser */
+  .panel .pmin { position: absolute; top: 2px; right: 21px; width: 16px; height: 16px; cursor: pointer; color: var(--muted); font: 700 13px/16px sans-serif;
+    text-align: center; border-radius: 3px; user-select: none; opacity: .65; z-index: 1; }
+  .panel .pmin:hover { opacity: 1; background: var(--border); }
+  #controls, #status, #legend, .panel.collapsed { padding-right: 44px; }
+  .panel.collapsed > *:not(.grip):not(.pmin) { display: none !important; }
+  .panel.collapsed { height: auto !important; min-height: 0 !important; width: auto !important; min-width: 0 !important; resize: none !important; flex: none !important; }
+  .panel.collapsed::before { content: attr(data-title); font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
   .panehead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-bottom: 6px; }
   .panehead h3 { margin: 0; }
   .panehead label { font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -671,6 +679,7 @@ applyChatFilters();
 // ---- every panel can be moved, as the 3D view's windows: dragged by its grip (or its heading), put where it was left (a fraction of
 // the window, so a resize keeps it), the chat's size too; remembered in this browser. A double-click on the grip puts it back.
 const PKEY = "eqmq-viewer-panels.v1", PIDS = ["controls", "legend", "group", "enemies", "plan", "chatpanel", "status"];
+const PTITLES = {controls: "Controls", legend: "Legend", group: "Group", enemies: "Enemies", plan: "Plan", chatpanel: "Chat", status: "Status"};
 let PS = {}; try { PS = JSON.parse(localStorage.getItem(PKEY) || "{}") || {}; } catch { PS = {}; }
 const savePanels = () => { try { localStorage.setItem(PKEY, JSON.stringify(PS)); } catch {} };
 const phone = () => matchMedia("(max-width: 700px)").matches;
@@ -689,6 +698,8 @@ function applyPanels() {
     } else {
       el.classList.remove("moved"); el.style.left = el.style.top = "";
     }
+    el.classList.toggle("collapsed", !!st.min);
+    const mb = el.querySelector(":scope > .pmin"); if (mb) { mb.textContent = st.min ? "+" : "\u2212"; mb.title = st.min ? "Open" : "Minimise"; }
     if (id === "chatpanel" && st.w && !phone()) { el.style.width = st.w + "px"; el.style.height = st.h + "px"; }
     else if (id === "chatpanel") { el.style.width = el.style.height = ""; }
   }
@@ -699,7 +710,13 @@ for (const id of PIDS) {
   const g = document.createElement("span");
   g.className = "grip"; g.textContent = "\u2725"; g.title = "Drag to move (double-click: back where it was)";
   el.appendChild(g);
-  g.addEventListener("dblclick", () => { delete PS[id]; savePanels(); applyPanels(); });
+  g.addEventListener("dblclick", () => { const min = PS[id] && PS[id].min; delete PS[id]; if (min) PS[id] = {min}; savePanels(); applyPanels(); });
+  // minimise: the panel down to its name, and back
+  el.dataset.title = PTITLES[id] || id;
+  const m = document.createElement("span");
+  m.className = "pmin"; m.title = "Minimise (click again to open)";
+  el.appendChild(m);
+  m.addEventListener("click", e => { e.stopPropagation(); PS[id] = Object.assign(PS[id] || {}, {min: !(PS[id] && PS[id].min)}); savePanels(); applyPanels(); });
 }
 let panelDrag = null;
 document.addEventListener("pointerdown", e => {
