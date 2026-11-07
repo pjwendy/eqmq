@@ -920,23 +920,23 @@ class Bot:
             if watch in self._handlers["line"]:
                 self._handlers["line"].remove(watch)
 
-    async def _pack(self, command: str, until, timeout: float = 4) -> list[str]:
-        """Send a ^pack command and collect what it says ("pack ..." lines) until until(line) or timeout."""
+    async def _pack(self, command: str, until, timeout: float = 4, verb: str = "pack") -> list[str]:
+        """Send a ^pack (or ^bank) command and collect what it says ("pack ..." lines) until until(line) or timeout."""
         said: list[str] = []
         done = asyncio.Event()
 
         def watch(line: str) -> None:
             text = line.strip()
-            if text.startswith("pack"):
+            if text.startswith(verb):
                 said.append(text)
                 if until(text):
                     done.set()
 
         self._handlers["line"].append(watch)
         try:
-            result = await self.DoCommand(f"/bot ^pack {command}")
+            result = await self.DoCommand(f"/bot ^{verb} {command}")
             if not result:
-                return [f"pack: {result.error}"]
+                return [f"{verb}: {result.error}"]
             try:
                 await asyncio.wait_for(done.wait(), timeout)
             except asyncio.TimeoutError:
@@ -989,6 +989,41 @@ class Bot:
         said = await self._pack(f"take {slot} byname {bot_name}", lambda t: ":" in t, timeout)
         last = said[-1] if said else ""
         if " gave back " in last:
+            return CommandResult(True)
+        return CommandResult(False, last or f"{bot_name} said nothing")
+
+    async def bank_list(self, bot_name: str, timeout: float = 4) -> tuple[list[PackItem], int]:
+        """What one of your bots keeps in its bank (^bank: 24 slots and the bags in them; [PackItem], slots 2000 and up), and how many more
+        things it has room for. Anywhere."""
+        said = await self._pack(f"list byname {bot_name}", lambda t: "room for" in t, timeout, verb="bank")
+        items, room = [], 0
+        for text in said:
+            if "room for" in text:
+                try:
+                    room = int(text.rsplit("room for", 1)[1].split()[0])
+                except (ValueError, IndexError):
+                    pass
+                continue
+            parts = text.split(" ", 5)  # bank <slot> <item id> <count> <bag|item> <name>
+            if len(parts) == 6 and parts[1].lstrip("-").isdigit() and parts[4] in ("bag", "item"):
+                items.append(PackItem(int(parts[1]), int(parts[2]), int(parts[3]), parts[5], parts[4] == "bag"))
+        return items, room
+
+    async def bank_put(self, bot_name: str, pack_slot: int, timeout: float = 4) -> CommandResult:
+        """One of your bots banks what's in one of its pack slots (PackItem.Slot from pack_list): into its bank, onto a stack of the same,
+        a bag into a free slot, anything else into a bag with room. A bag must be empty. Only with a banker near the bot."""
+        said = await self._pack(f"put {pack_slot} byname {bot_name}", lambda t: ":" in t, timeout, verb="bank")
+        last = said[-1] if said else ""
+        if " banked " in last:
+            return CommandResult(True)
+        return CommandResult(False, last or f"{bot_name} said nothing")
+
+    async def bank_take(self, bot_name: str, bank_slot: int, timeout: float = 4) -> CommandResult:
+        """One of your bots takes what's in one of its bank slots (from bank_list) back into its pack (then pack_take gives it to you).
+        Only with a banker near the bot."""
+        said = await self._pack(f"take {bank_slot} byname {bot_name}", lambda t: ":" in t, timeout, verb="bank")
+        last = said[-1] if said else ""
+        if " took out " in last:
             return CommandResult(True)
         return CommandResult(False, last or f"{bot_name} said nothing")
 
