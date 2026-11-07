@@ -272,7 +272,7 @@ class MapViewer(MQPlugin):
             "zone": zone.ShortName,
             "zone_name": zone.Name,
             "me": {"id": me.ID, "name": me.Name, "level": me.Level, "x": me.X, "y": me.Y, "z": me.Z, "heading": me.Heading,
-                   "target": me.TargetID, "hp": me.PctHPs, "hour": me.GameHour, "race": me.RaceID, "sex": me.Gender,
+                   "target": me.TargetID, "hp": me.PctHPs, "cast": me.CastingID, "atk": int(bool(me.Combat)), "hour": me.GameHour, "race": me.RaceID, "sex": me.Gender,
                    "mana": me.PctMana, "exp": round(me.ExpPct, 1), "aa": round(me.AAExpPct, 1), "aap": me.AAPoints, "cid": me.ClassID, "buffs": self._buff_rows(me.Buffs),
                    "haters": [h if isinstance(h, int) else h.ID for h in me.Haters][:40]},
             "spawns": [
