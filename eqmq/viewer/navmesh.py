@@ -42,9 +42,11 @@ class _Islands:
             self.parent[b] = a
 
 
-def read_nav(path: str) -> dict:
+def read_nav(path: str, with_z: bool = False, detail: bool = False) -> dict:
     """{"polys": [[island, z, mx1, my1, mx2, my2, ...], ...], "links": [[mx1, my1, z1, mx2, my2, z2], ...],
-    "islands": n}, islands numbered largest first."""
+    "islands": n}, islands numbered largest first. with_z: each vertex's height too, [island, z, mx1, my1, z1, mx2, my2, z2, ...]
+    (tools/navaudit.py, which compares the navmesh with the client's floors). detail: also "dtris", the detail mesh's triangles (the ground's
+    real heights inside each polygon), [[polygon index into polys, mx1, my1, z1, mx2, my2, z2, mx3, my3, z3], ...]."""
     with open(path, "rb") as f:
         raw = f.read()
     if raw[:9] != b"EQNAVMESH" or struct.unpack_from("<I", raw, 9)[0] != 2:
@@ -57,6 +59,7 @@ def read_nav(path: str) -> dict:
     edges = []    # (poly, tile, a, b): edges on a tile border, to match across tiles
     links = []    # off-mesh connections: (a, b) recast points
     internal = []
+    detail_out = []  # (poly index, a, b, c) recast points
     for tile in range(tiles):
         _ref, size = struct.unpack_from("<Ii", body, off)
         off += 8
@@ -70,8 +73,29 @@ def read_nav(path: str) -> dict:
         first = len(polys)
         tile_polys = [POLY.unpack_from(data, p + i * POLY.size) for i in range(poly_count)]
         p += _align4(POLY.size * poly_count)
-        p += _align4(12 * max_links) + _align4(12 * detail_meshes) + _align4(4 * 3 * detail_verts)
+        p += _align4(12 * max_links)
+        dm_off = p
+        p += _align4(12 * detail_meshes)
+        dv_off = p
+        p += _align4(4 * 3 * detail_verts)
+        dt_off = p
         p += _align4(4 * detail_tris) + _align4(16 * bv_nodes)
+        if detail and detail_meshes:
+            dverts = struct.unpack_from(f"<{detail_verts * 3}f", data, dv_off) if detail_verts else ()
+            for i, poly in enumerate(tile_polys):
+                if i >= detail_meshes or (poly[15] >> 6) == POLYTYPE_OFFMESH:
+                    continue
+                vbase, tbase, vcount, tcount = struct.unpack_from("<IIBB", data, dm_off + 12 * i)
+                n = poly[14]
+
+                def vert(k, n=n, poly=poly, vbase=vbase):
+                    if k < n:
+                        return verts[poly[1 + k] * 3:poly[1 + k] * 3 + 3]
+                    q = (vbase + k - n) * 3
+                    return dverts[q:q + 3]
+                for t in range(tcount):
+                    a, b, c, _flags = struct.unpack_from("<4B", data, dt_off + 4 * (tbase + t))
+                    detail_out.append((first + i, vert(a), vert(b), vert(c)))
         for i in range(offmesh_count):
             c = OFFMESH.unpack_from(data, p + i * OFFMESH.size)
             links.append((c[0:3], c[3:6]))
@@ -143,16 +167,22 @@ def read_nav(path: str) -> dict:
             area[isl.find(i)] = area.get(isl.find(i), 0.0) + abs(s) / 2
     order = {root: n for n, root in enumerate(sorted(area, key=lambda r: -area[r]))}
     out = []
+    index = {}  # polys' index -> its row in out
     for i, (pv, _) in enumerate(polys):
         if not pv:
             continue
+        index[i] = len(out)
         row = [order[isl.find(i)], round(sum(v[1] for v in pv) / len(pv), 1)]
-        for x, _, z in pv:
-            row += [round(-x, 1), round(-z, 1)]
+        for x, y, z in pv:
+            row += [round(-x, 1), round(-z, 1), round(y, 1)] if with_z else [round(-x, 1), round(-z, 1)]
         out.append(row)
-    return {"polys": out, "islands": len(order),
+    res = {"polys": out, "islands": len(order),
             "links": [[round(-a[0], 1), round(-a[2], 1), round(a[1], 1), round(-b[0], 1), round(-b[2], 1), round(b[1], 1)]
                       for a, b in links]}
+    if detail:
+        res["dtris"] = [[index[pi], *[c for v in (a, b, cc) for c in (round(-v[0], 2), round(-v[2], 2), round(v[1], 2))]]
+                        for pi, a, b, cc in detail_out if pi in index]
+    return res
 
 
 class NavStore:
