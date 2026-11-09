@@ -35,6 +35,11 @@ from .navmesh import NavStore
 log = logging.getLogger("eqmq.viewer")
 
 UPDATE_INTERVAL = 0.5  # seconds between live updates sent to the page
+# live streams (the map and the 3D view's /events) run in the runner, beside the leaders' own play: one snapshot per leader per tick, shared by
+# everyone watching it, and only so many watchers (the operator, 9 Nov, before sharing the public pages: viewers mustn't slow the guild)
+MAX_STREAMS = 6        # watchers of one leader at once
+MAX_STREAMS_ALL = 24   # watchers of all the leaders on this runner at once
+_streams_all = 0
 
 CLASS_SHORT = {1: "WAR", 2: "CLR", 3: "PAL", 4: "RNG", 5: "SHD", 6: "DRU", 7: "MNK", 8: "BRD", 9: "ROG", 10: "SHM",
                11: "NEC", 12: "WIZ", 13: "MAG", 14: "ENC", 15: "BST", 16: "BER"}
@@ -342,13 +347,39 @@ class MapViewer(MQPlugin):
                      f"Cache-Control: no-store\r\nConnection: close\r\n\r\n".encode() + body)
         await writer.drain()
 
+    def _shared_snapshot(self) -> dict:
+        """The snapshot for this tick, made once and shared by every watcher (each adds only its own new log and chat lines)."""
+        now = time.monotonic()
+        cached = getattr(self, "_snap", None)
+        if cached is None or now - cached[0] >= UPDATE_INTERVAL * 0.8:
+            cached = (now, self.snapshot())
+            self._snap = cached
+        return cached[1]
+
     async def _events(self, writer) -> None:
+        global _streams_all
+        mine = getattr(self, "_streams", 0)
+        if mine >= MAX_STREAMS or _streams_all >= MAX_STREAMS_ALL:
+            body = b"Too many people are watching live right now: try again in a while."
+            writer.write(b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain\r\nRetry-After: 60\r\nAccess-Control-Allow-Origin: *\r\n"
+                         + f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode() + body)
+            await writer.drain()
+            return
+        self._streams = mine + 1
+        _streams_all += 1
+        try:
+            await self._stream(writer)
+        finally:
+            self._streams = max(0, getattr(self, "_streams", 1) - 1)
+            _streams_all = max(0, _streams_all - 1)
+
+    async def _stream(self, writer) -> None:
         writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\n"
                      b"Access-Control-Allow-Origin: *\r\n"  # (another page on this machine, the 3D view, reads the stream)
                      b"Connection: keep-alive\r\n\r\n")
         sent = sent_chat = 0
         while True:  # (it goes on while the character is logged out and in again: the 3D view says so, and the stream ends only when the page does: a write fails)
-            state = self.snapshot()
+            state = dict(self._shared_snapshot())  # (a shallow copy: the shared one isn't changed)
             state["log"] = [e for e in self._log if e["id"] > sent]
             if state["log"]:
                 sent = state["log"][-1]["id"]
