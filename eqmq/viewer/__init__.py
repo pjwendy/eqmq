@@ -245,7 +245,7 @@ class MapViewer(MQPlugin):
         for name in names:
             m = next((g for g in members if g.Name == name), None)
             if name == me.Name:
-                group.append({"id": me.ID, "name": me.Name, "cls": CLASS_SHORT.get(me.ClassID, "?"), "level": me.Level,
+                group.append({"id": me.ID, "name": me.Name, "cls": CLASS_SHORT.get(me.ClassID, "?"), "cid": me.ClassID, "level": me.Level,
                               "hp": me.PctHPs, "mana": me.PctMana, "has_mana": me.MaxMana > 0,
                               "leader": bool(m and m.Leader) or not members, "here": True,
                               "exp": round(me.ExpPct, 1), "aa": round(me.AAExpPct, 1), "aa_points": me.AAPoints,
@@ -253,7 +253,7 @@ class MapViewer(MQPlugin):
                               or me.AASplit > 0, "buffs": self._buff_rows(me.Buffs)})
                 continue
             s = spawns.get(m.ID) if m and m.ID else None
-            group.append({"id": s.ID if s else 0, "name": name, "cls": CLASS_SHORT.get(s.ClassID, "?") if s else "?", "level": s.Level if s else 0,
+            group.append({"id": s.ID if s else 0, "name": name, "cls": CLASS_SHORT.get(s.ClassID, "?") if s else "?", "cid": s.ClassID if s else 0, "level": s.Level if s else 0,
                           "hp": s.PctHPs if s else 0, "mana": s.PctMana if s else 0,
                           "has_mana": bool(s and s.ClassID not in NO_MANA), "leader": bool(m and m.Leader),
                           "here": s is not None, "buffs": self._buff_rows(m.Buffs if m else ())})
