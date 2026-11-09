@@ -72,6 +72,9 @@ BANK_BAGS_BEGIN = 6210                 # bank bag contents: 6210 + (bank slot - 
 # (the server's numbering: 200 per bag; carried bags 4010-6009, the cursor's bag 6010-6209)
 
 
+AUGMENT_TYPE = 54  # EQ::item::ItemTypeAugmentation
+
+
 @dataclass(frozen=True)
 class Item:
     Slot: int
@@ -128,7 +131,9 @@ class Item:
         return 0 <= self.Slot <= 22
 
     def Fits(self, slot: int) -> bool:
-        return bool(self.Slots & (1 << slot))
+        """Can it be worn in this slot? Never an augment: its slots are the items it goes into, not where it's worn (no client equips
+        one; the guild's leaders and bots wore Bluegreen Rocks on their fingers until 9 Nov)."""
+        return self.ItemType != AUGMENT_TYPE and bool(self.Slots & (1 << slot))
 
     @staticmethod
     def from_pb(i: pb.Item) -> "Item":
