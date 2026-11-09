@@ -42,6 +42,7 @@ class Buff:
     ID: int
     Name: str
     Ticks: int       # 6-second ticks left; -1 permanent
+    Slot: int = -1   # its slot in the buff window, 0 first (a dispel takes the first it can; a new buff goes in the first free one)
 
     @property
     def Duration(self) -> float:
@@ -182,6 +183,7 @@ class BotGear:
     RaceBit: int
     Equipment: tuple = ()
     Resists: Resists = Resists()
+    Buffs: tuple = ()  # Buff, what is on it now, with slots
 
     def Worn(self, slot: int) -> "Item | None":
         return next((i for i in self.Equipment if i.Slot == slot), None)
@@ -189,7 +191,8 @@ class BotGear:
     @staticmethod
     def from_pb(b: pb.BotGear) -> "BotGear":
         return BotGear(b.spawn_id, b.name, b.class_id, b.race_id, b.level, b.race_bit,
-                       tuple(Item.from_pb(i) for i in b.equipment), Resists.from_pb(b.resists))
+                       tuple(Item.from_pb(i) for i in b.equipment), Resists.from_pb(b.resists),
+                       tuple(Buff(x.spell_id, x.name, x.ticks, x.slot) for x in b.buffs))
 
 
 @dataclass(frozen=True)
@@ -294,7 +297,7 @@ class Spawn:
         return Spawn(
             ID=s.id, Name=s.name, Type=type_name, Level=s.level, ClassID=s.class_id,
             RaceID=s.race_id, X=s.x, Y=s.y, Z=s.z, Heading=s.heading, PctHPs=s.hp_pct,
-            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, CastingID=s.casting_spell_id, Status=s.status, AggroRange=s.aggro_range, AssistRange=s.assist_range, Aggro=s.aggro, Buffs=tuple(Buff(b.spell_id, b.name, b.ticks) for b in s.buffs), _me_x=me_x, _me_y=me_y, _me_z=me_z,
+            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, CastingID=s.casting_spell_id, Status=s.status, AggroRange=s.aggro_range, AssistRange=s.assist_range, Aggro=s.aggro, Buffs=tuple(Buff(b.spell_id, b.name, b.ticks, b.slot) for b in s.buffs), _me_x=me_x, _me_y=me_y, _me_z=me_z,
         )
 
 
@@ -405,7 +408,7 @@ class Me:
             Heading=m.heading, TargetID=m.target_id, Sitting=m.sitting, Combat=m.auto_attack,
             CastingID=m.casting_spell_id,
             Gems=tuple(Gem(g.slot + 1, g.spell_id, g.name, g.ready) for g in m.gems),
-            Buffs=tuple(Buff(b.spell_id, b.name, b.ticks) for b in m.buffs),
+            Buffs=tuple(Buff(b.spell_id, b.name, b.ticks, b.slot) for b in m.buffs),
             Platinum=m.platinum, Gold=m.gold, Silver=m.silver, Copper=m.copper, Haters=tuple(m.haters),
             Weight=m.weight, Capacity=m.capacity, RaceBit=m.race_bit,
             ExpPct=m.exp_pct, AAExpPct=m.aa_exp_pct, AAPoints=m.aa_points, AASplit=m.aa_split, RunSpeed=m.run_speed,
@@ -450,7 +453,7 @@ class Group:
     def from_pb(m: pb.Self) -> "Group | None":
         if not m.group:
             return None
-        return Group(tuple(GroupMember(g.name, g.spawn_id, g.leader, g.bot, tuple(Buff(b.spell_id, b.name, b.ticks) for b in g.buffs)) for g in m.group), _me=m.name)
+        return Group(tuple(GroupMember(g.name, g.spawn_id, g.leader, g.bot, tuple(Buff(b.spell_id, b.name, b.ticks, b.slot) for b in g.buffs)) for g in m.group), _me=m.name)
 
 
 RAID_GROUPLESS = 0xFFFFFFFF

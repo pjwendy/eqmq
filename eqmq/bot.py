@@ -1092,6 +1092,13 @@ class Bot:
                     break
         return self.Bots()
 
+    async def buff_remove(self, who: "Spawn | int | None", slot: int) -> CommandResult:
+        """Click a beneficial buff off yourself (None) or one of your bots, by its slot (Buff.Slot), as the buff window does."""
+        cmd = pb.Command()
+        cmd.buff_remove.spawn_id = 0 if who is None else (who if isinstance(who, int) else who.ID)
+        cmd.buff_remove.slot = slot
+        return await self.command(cmd)
+
     async def raid_invite(self, who: Spawn | str | None = None) -> CommandResult:
         """Invite into your raid (making one with you and your group if you have none), as the raid window's invite: a player who is
         ungrouped or leads a group (the group comes too), or a bot of yours (ungrouped or leading a bot group). A headless character
