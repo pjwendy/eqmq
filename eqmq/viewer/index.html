@@ -785,9 +785,19 @@ function appendLog(entries) {
   if (atBottom) box.scrollTop = box.scrollHeight;
 }
 
+// the stream opened again by the page itself: a browser gives up on an EventSource for good when its reconnect gets an error back (the
+// proxy's 502 while the runner restarts, a 503 when too many are watching), and the page sat at "disconnected" (the operator, 9 Nov)
+let es = null, retry = 2000, again = null, lastMsg = 0;
+function lose() {
+  $("status").innerHTML = '<span class="muted">Viewer disconnected, reconnecting…</span>';
+  if (es) { es.close(); es = null; }
+  if (!again) { again = setTimeout(() => { again = null; connect(); }, retry); retry = Math.min(15000, retry * 1.5); }
+}
+setInterval(() => { if (es && performance.now() - lastMsg > 8000) lose(); }, 1000);  // (a stream gone quiet without an error)
 function connect() {
-  const es = new EventSource("events");
+  es = new EventSource("events"); lastMsg = performance.now();
   es.onmessage = async ev => {
+    lastMsg = performance.now(); retry = 2000;
     state = JSON.parse(ev.data);
     if (state.connected && state.zone !== zone) { zone = state.zone; await loadMap(); loadNav(); }
     if (state.connected && $("follow").checked) { view.cx = -state.me.x; view.cy = -state.me.y; }
@@ -800,7 +810,7 @@ function connect() {
     }
     document.dispatchEvent(new CustomEvent("eqmq-state", { detail: state }));  // for plugins' controls
   };
-  es.onerror = () => { $("status").innerHTML = '<span class="muted">Viewer disconnected, retrying…</span>'; };
+  es.onerror = lose;
 }
 
 // pan and zoom: drag with a mouse or one finger, zoom with the wheel or by pinching
