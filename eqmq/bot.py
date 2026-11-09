@@ -528,6 +528,20 @@ class Bot:
         cmd.combine.container_slot = container_slot
         return await self.command(cmd)
 
+    async def augment(self, item_slot: int, socket: int, action: int = 0, distiller_slot: int = -1) -> CommandResult:
+        """The client's augment window. The augment to put in is on the cursor already (move_item to slot 33). item_slot is the item to be
+        augmented, worn or carried (a bank slot isn't allowed); socket 0-5. action: 0 insert the cursor's augment, 1 remove the augment in
+        the socket whole (it comes to the cursor; Item.AugDistiller says which distiller must be in distiller_slot, 0: none needed), 2 swap
+        (insert the cursor's, the old one comes to the cursor; the distiller as for remove), 3 destroy the augment in the socket. The server
+        checks the socket's type against the augment's AugType and the worn slots, and says why it won't in chat (recent_messages); the
+        item's new Augs arrive in the next inventory."""
+        cmd = pb.Command()
+        cmd.augment.item_slot = int(item_slot)
+        cmd.augment.aug_index = int(socket)
+        cmd.augment.action = int(action)
+        cmd.augment.solvent_slot = int(distiller_slot)
+        return await self.command(cmd)
+
     async def aa_exp(self, percent: int) -> CommandResult:
         """The share of experience going to AA, as the client's AA window slider (0 off, 100: no more
         levels; Me.AASplit says what it is)."""

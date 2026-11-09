@@ -112,6 +112,19 @@ class Item:
     ScrollLevel: int = 0  # ... the level your class learns it (0: not your class)
     BagWR: int = 0        # containers: weight reduction, percent
     BagType: int = 0      # containers: EQ bag type (0-8 storage; 9 and up tradeskill: mixing bowl, forge...)
+    AugType: int = 0      # an augment: the socket types it fits, a bitmask (bit n-1: socket type n); 0 for anything else
+    AugRestrict: int = 0  # an augment: what it may go in (0 anything, 1 armour, 2 weapons, 3 one-handed, 4 two-handed ...)
+    AugDistiller: int = 0  # an augment: the item id of the distiller that removes it whole (0: none needed)
+    AugSockets: tuple = ()  # an item with sockets: the type of each of the six (0: none there)
+    Augs: tuple = ()      # ... and the item id in each (0: empty); () when none is in
+
+    @property
+    def IsAugment(self) -> bool:
+        return self.AugType != 0 or self.ItemType == 54
+
+    def FreeSockets(self) -> list[int]:
+        """Indexes (0-5) of the sockets with nothing in them."""
+        return [n for n, t in enumerate(self.AugSockets) if t and not (n < len(self.Augs) and self.Augs[n])]
 
     @property
     def StorageBag(self) -> bool:
@@ -140,7 +153,8 @@ class Item:
         return Item(i.slot, i.item_id, i.name, i.charges, i.container, i.ac, i.hp, i.mana, i.endurance, i.str,
                     i.sta, i.agi, i.dex, i.wis, getattr(i, "int"), i.cha, i.damage, i.delay, i.slots, i.req_level,
                     i.weight, i.price, i.no_drop, i.lore, i.magic, i.bag_slots, i.bag_size, i.item_type, i.usable,
-                    i.classes, i.races, i.scroll_spell, i.scroll_level, i.bag_wr, i.bag_type)
+                    i.classes, i.races, i.scroll_spell, i.scroll_level, i.bag_wr, i.bag_type,
+                    i.aug_type, i.aug_restrict, i.aug_distiller, tuple(i.aug_sockets), tuple(i.augs))
 
 
 @dataclass(frozen=True)
