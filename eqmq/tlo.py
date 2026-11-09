@@ -158,6 +158,20 @@ class Item:
 
 
 @dataclass(frozen=True)
+class Resists:
+    """Resists now (base, gear, buffs, AAs), as the inventory window shows them."""
+    Magic: int = 0
+    Cold: int = 0
+    Fire: int = 0
+    Poison: int = 0
+    Disease: int = 0
+
+    @staticmethod
+    def from_pb(r: pb.Resists) -> "Resists":
+        return Resists(r.magic, r.cold, r.fire, r.poison, r.disease)
+
+
+@dataclass(frozen=True)
 class BotGear:
     """One of your EQEmu bots and what it wears (Item.Slot is the worn slot)."""
     ID: int
@@ -167,6 +181,7 @@ class BotGear:
     Level: int
     RaceBit: int
     Equipment: tuple = ()
+    Resists: Resists = Resists()
 
     def Worn(self, slot: int) -> "Item | None":
         return next((i for i in self.Equipment if i.Slot == slot), None)
@@ -174,7 +189,7 @@ class BotGear:
     @staticmethod
     def from_pb(b: pb.BotGear) -> "BotGear":
         return BotGear(b.spawn_id, b.name, b.class_id, b.race_id, b.level, b.race_bit,
-                       tuple(Item.from_pb(i) for i in b.equipment))
+                       tuple(Item.from_pb(i) for i in b.equipment), Resists.from_pb(b.resists))
 
 
 @dataclass(frozen=True)
@@ -325,6 +340,7 @@ class Me:
     MaxAir: int = 0         # seconds of air at most (Stamina, Lung Capacity)
     BankMoney: int = 0      # the coin in our bank, in copper (bot.bank_coin moves it, beside a banker)
     Gender: int = 0         # 0 male, 1 female, 2 neutral
+    Resists: Resists = Resists()  # magic, cold, fire, poison, disease now
 
     @property
     def Night(self) -> bool:
@@ -394,6 +410,7 @@ class Me:
             Weight=m.weight, Capacity=m.capacity, RaceBit=m.race_bit,
             ExpPct=m.exp_pct, AAExpPct=m.aa_exp_pct, AAPoints=m.aa_points, AASplit=m.aa_split, RunSpeed=m.run_speed,
             Disciplines=tuple(m.disciplines), GameHour=m.game_hour, Air=m.air, MaxAir=m.max_air, BankMoney=m.bank_copper,
+            Resists=Resists.from_pb(m.resists),
         )
 
 

@@ -61,6 +61,7 @@ The TLOs are properties of the `Bot`. Each one returns a fresh, read-only object
 | `bot.Target` | Your target, as a `Spawn` (or `None`) | `${Target}` |
 | `bot.Spawn(search)`, `bot.Spawns(search)`, `bot.SpawnCount(search)`, `bot.NearestSpawn(n, search)` | Spawns in the zone matching an MQ2-style search | `${Spawn[]}`, `${SpawnCount[]}`, `${NearestSpawn[]}` |
 | `bot.Group` | `All` (members, you first: each a `GroupMember` with `Name`, `ID`, `Leader`, `Bot` and `Buffs`, what is on it), `Members`, `Leader`, `Member(n or name)` | `${Group}` |
+| `bot.Me.Resists`, `BotGear.Resists` | Resists now, yours and each bot's (`Magic`, `Cold`, `Fire`, `Poison`, `Disease`: base, gear, buffs and AAs) | `${Me.svMagic}` |
 | `bot.Raid` | The raid you are in, or None: `All` (each a `RaidMember` with `Name`, `ID`, `Group` 0-11 or `RAID_GROUPLESS`, `GroupLeader`, `RaidLeader`, `Bot`, `Class`, `Level`), `Members`, `Leader`, `Member(name)`, `Group(n)`, `Groups`, `Ungrouped` | `${Raid}` |
 | `bot.Zone` | `ShortName`, `Name`, `ID`, `Exits` (one per neighbouring zone, with where its zone line is) and `Exit(short_name)` | `${Zone}` |
 | `bot.Inventory()`, `bot.Bank()`, `bot.FindItem(name)`, `bot.FindItemCount(name)` | Items, with their slots and stats; an item with sockets has `AugSockets` (the type of each of the six) and `Augs` (the item id in each, 0 empty), an augment `AugType` (the socket types it fits, a bitmask), `AugRestrict` and `AugDistiller` | `${FindItem[]}` |
