@@ -61,6 +61,7 @@ The TLOs are properties of the `Bot`. Each one returns a fresh, read-only object
 | `bot.Target` | Your target, as a `Spawn` (or `None`) | `${Target}` |
 | `bot.Spawn(search)`, `bot.Spawns(search)`, `bot.SpawnCount(search)`, `bot.NearestSpawn(n, search)` | Spawns in the zone matching an MQ2-style search | `${Spawn[]}`, `${SpawnCount[]}`, `${NearestSpawn[]}` |
 | `bot.Group` | `All` (members, you first: each a `GroupMember` with `Name`, `ID`, `Leader`, `Bot` and `Buffs`, what is on it), `Members`, `Leader`, `Member(n or name)` | `${Group}` |
+| `bot.Raid` | The raid you are in, or None: `All` (each a `RaidMember` with `Name`, `ID`, `Group` 0-11 or `RAID_GROUPLESS`, `GroupLeader`, `RaidLeader`, `Bot`, `Class`, `Level`), `Members`, `Leader`, `Member(name)`, `Group(n)`, `Groups`, `Ungrouped` | `${Raid}` |
 | `bot.Zone` | `ShortName`, `Name`, `ID`, `Exits` (one per neighbouring zone, with where its zone line is) and `Exit(short_name)` | `${Zone}` |
 | `bot.Inventory()`, `bot.Bank()`, `bot.FindItem(name)`, `bot.FindItemCount(name)` | Items, with their slots and stats; an item with sockets has `AugSockets` (the type of each of the six) and `Augs` (the item id in each, 0 empty), an augment `AugType` (the socket types it fits, a bitmask), `AugRestrict` and `AugDistiller` | `${FindItem[]}` |
 | `bot.Book()`, `bot.BookSpell(name)` | The spell book | `${Me.Book[]}` |
@@ -114,6 +115,7 @@ mob died shows up in state and events, as it would on a player's screen.
 | `pet(command)`, `Pet()` | Command your pet (`"attack"`, `"back off"`, `"follow"`, `"taunt on"`, ... `PET_COMMANDS`); your pet. |
 | `use_item(item)` | Right-click an item: a click effect, a potion, a tome. |
 | `invite(who)`, `disband()` | Groups. |
+| `raid_invite(who)`, `raid_remove(who)`, `raid_move(who, group)` | Raids, as the raid window: invite a player who is ungrouped or leads a group (the whole group comes in) or a bot of yours, making a raid if you have none; take a member out (None: leave); move a member to raid group 0-11 (None: no group). A headless character accepts a guildmate's or a GM's raid invite by itself and leaves anyone else's unanswered. |
 | `spawn_bots(names)`, `give_to_bot(name, item, slot)` | Spawn and group your EQEmu bots; hand one an item. |
 | `wait_zoned(timeout)` | Wait for the next zone change (after dying, or a teleport). |
 | `walk_time(distance)` | A sensible timeout for walking that far at your current run speed. |

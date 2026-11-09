@@ -15,9 +15,9 @@ from .plugin import MQPlugin, load_plugins
 from .proto import headless_pb2 as pb
 from .search import SpawnSearch
 from .state import StateMirror
-from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Spawn, Zone, WORLD_CONTAINER, WORLD_SLOT
+from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Raid, Spawn, Zone, WORLD_CONTAINER, WORLD_SLOT
 
-SDK_VERSION = "eqmq/0.19"
+SDK_VERSION = "eqmq/0.20"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -319,6 +319,11 @@ class Bot:
     def Group(self) -> Group | None:
         """Your group, or None when not grouped."""
         return Group.from_pb(self._state.me) if self._state.me else None
+
+    @property
+    def Raid(self) -> Raid | None:
+        """The raid you are in (everyone in it, you too), or None when not in one."""
+        return Raid.from_pb(self._state.me) if self._state.me else None
 
     def Bots(self) -> list[Spawn]:
         """Your spawned EQEmu bots in this zone, nearest first."""
@@ -1086,6 +1091,27 @@ class Bot:
                 if all(g and g.Member(b.Name) for b in self.Bots()):
                     break
         return self.Bots()
+
+    async def raid_invite(self, who: Spawn | str | None = None) -> CommandResult:
+        """Invite into your raid (making one with you and your group if you have none), as the raid window's invite: a player who is
+        ungrouped or leads a group (the group comes too), or a bot of yours (ungrouped or leading a bot group). A headless character
+        accepts a guildmate's invite by itself. None: your target."""
+        cmd = pb.Command()
+        cmd.raid_invite.name = "" if who is None else (who if isinstance(who, str) else who.Name)
+        return await self.command(cmd)
+
+    async def raid_remove(self, who: Spawn | str | None = None) -> CommandResult:
+        """Take a member out of the raid (the raid leader's right); None: leave the raid yourself."""
+        cmd = pb.Command()
+        cmd.raid_remove.name = "" if who is None else (who if isinstance(who, str) else who.Name)
+        return await self.command(cmd)
+
+    async def raid_move(self, who: Spawn | str, group: int | None) -> CommandResult:
+        """Put a raid member in raid group 0-11, or in no group (None), as dragging a name in the raid window (the raid leader's right)."""
+        cmd = pb.Command()
+        cmd.raid_move.name = who if isinstance(who, str) else who.Name
+        cmd.raid_move.group = 0xFFFFFFFF if group is None else group
+        return await self.command(cmd)
 
     async def disband(self) -> CommandResult:
         """As /disband: removes your target from the group if you lead it, else leaves."""

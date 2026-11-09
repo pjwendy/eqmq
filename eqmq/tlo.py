@@ -436,6 +436,57 @@ class Group:
         return Group(tuple(GroupMember(g.name, g.spawn_id, g.leader, g.bot, tuple(Buff(b.spell_id, b.name, b.ticks) for b in g.buffs)) for g in m.group), _me=m.name)
 
 
+RAID_GROUPLESS = 0xFFFFFFFF
+
+
+@dataclass(frozen=True)
+class RaidMember:
+    Name: str
+    ID: int            # spawn id, 0 if not in this zone
+    Group: int         # raid group 0-11; RAID_GROUPLESS (or anything 12 and up) when in no group
+    GroupLeader: bool
+    RaidLeader: bool
+    Bot: bool          # an EQEmu bot
+    Class: int
+    Level: int
+
+
+@dataclass(frozen=True)
+class Raid:
+    """As MQ2's Raid TLO: everyone in the raid we are in, ourselves too."""
+    All: tuple[RaidMember, ...]
+
+    @property
+    def Members(self) -> int:
+        return len(self.All)
+
+    @property
+    def Leader(self) -> RaidMember | None:
+        return next((m for m in self.All if m.RaidLeader), None)
+
+    def Member(self, name: str) -> RaidMember | None:
+        return next((m for m in self.All if m.Name.lower() == name.lower()), None)
+
+    def Group(self, n: int) -> tuple[RaidMember, ...]:
+        """The members of raid group n (0-11), its leader first."""
+        return tuple(sorted((m for m in self.All if m.Group == n), key=lambda m: not m.GroupLeader))
+
+    @property
+    def Groups(self) -> dict[int, tuple[RaidMember, ...]]:
+        """Each raid group in use (0-11) and its members; those in no group are left out (see Ungrouped)."""
+        return {g: self.Group(g) for g in sorted({m.Group for m in self.All if m.Group < 12})}
+
+    @property
+    def Ungrouped(self) -> tuple[RaidMember, ...]:
+        return tuple(m for m in self.All if m.Group >= 12)
+
+    @staticmethod
+    def from_pb(m: pb.Self) -> "Raid | None":
+        if not m.raid:
+            return None
+        return Raid(tuple(RaidMember(r.name, r.spawn_id, r.group, r.group_leader, r.raid_leader, r.bot, r.class_id, r.level) for r in m.raid))
+
+
 @dataclass(frozen=True)
 class ZoneExit:
     Zone: str          # short name of the zone it leads to
