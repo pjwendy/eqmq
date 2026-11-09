@@ -325,7 +325,13 @@ class MapViewer(MQPlugin):
             path = path.split("?", 1)[0]
 
             if method == "GET" and path == "/events":
-                await self._events(writer)
+                await self._events(writer, headers)
+                return
+            if method == "GET" and path == "/watchers":
+                # who is watching live now (the dashboard's Visitors page asks over the internal network; the public proxy refuses this path)
+                ws = list(getattr(self, "_watchers", {}).values())
+                await self._send(writer, 200, "application/json", json.dumps({"leader": self.bot.Me.Name if self.bot.Me else "",
+                                                                               "watchers": ws}).encode())
                 return
             result = await self.route(method, path, body)
             if result is None:
@@ -356,7 +362,7 @@ class MapViewer(MQPlugin):
             self._snap = cached
         return cached[1]
 
-    async def _events(self, writer) -> None:
+    async def _events(self, writer, headers: dict | None = None) -> None:
         global _streams_all
         mine = getattr(self, "_streams", 0)
         if mine >= MAX_STREAMS or _streams_all >= MAX_STREAMS_ALL:
@@ -367,9 +373,17 @@ class MapViewer(MQPlugin):
             return
         self._streams = mine + 1
         _streams_all += 1
+        h = headers or {}
+        peer = writer.get_extra_info("peername")
+        who = {"ip": (h.get("x-forwarded-for", "").split(",")[0].strip() or (peer[0] if peer else "")),
+               "agent": h.get("user-agent", "")[:200], "since": round(time.time())}
+        if not hasattr(self, "_watchers"):
+            self._watchers = {}
+        self._watchers[id(writer)] = who
         try:
             await self._stream(writer)
         finally:
+            self._watchers.pop(id(writer), None)
             self._streams = max(0, getattr(self, "_streams", 1) - 1)
             _streams_all = max(0, _streams_all - 1)
 
