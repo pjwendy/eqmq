@@ -61,7 +61,17 @@
   #enemies .st { display: inline-block; font-size: 10px; font-weight: 700; border-radius: 3px; padding: 0 4px; margin-left: 3px; color: #15110d; }
   #enemies .st.mez { background: #b07ad6; } #enemies .st.root { background: #6fbf73; } #enemies .st.stun { background: #e0c34c; } #enemies .st.fear { background: #e08a3c; }
   #enemies .st.charm { background: #4cc2c0; } #enemies .st.cast { background: #e0524a; color: #fff; }
-  #group .member { margin: 6px 0 2px; }
+  /* group member item hover popup */
+  #grouptip { position: fixed; z-index: 100; display: none; max-width: 320px; pointer-events: none;
+    background: var(--panel); border: 1px solid var(--me); border-radius: 8px; padding: 8px;
+    box-shadow: 0 4px 16px #0004; font-size: 12px; color: var(--text); }
+  #grouptip .gt-name { font-weight: 600; color: var(--me); margin-bottom: 5px; font-size: 13px; }
+  #grouptip .gt-grid { display: grid; grid-template-columns: repeat(4, 40px); gap: 2px; }
+  #grouptip .gt-slot { width: 40px; height: 40px; position: relative; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; background: var(--track); }
+  #grouptip .gt-slot img { width: 100%; height: 100%; image-rendering: auto; display: block; }
+  #grouptip .gt-slot.empty { opacity: .4; }
+  #grouptip .gt-slotlabel { position: absolute; left: 0; right: 0; bottom: 0; font: 700 6px/1 sans-serif; text-align: center; color: #fff; text-shadow: 0 0 2px #000; overflow: hidden; white-space: nowrap; padding: 1px; }
+  #group .member { margin: 6px 0 2px; cursor: default; }
   .buffrow { display: flex; flex-wrap: nowrap; gap: 1px; margin-top: 3px; overflow: hidden; } .buffrow .bf { position: relative; flex: 1 1 0; min-width: 6px; max-width: 24px; aspect-ratio: 1; border-radius: 2px; overflow: hidden; background: var(--border); cursor: default; }
   .buffrow .bf img { width: 100%; height: 100%; display: block; image-rendering: auto; } .buffrow .bf i { font: normal 9px/1 sans-serif; color: var(--muted); position: absolute; inset: 0; display: grid; place-items: center; }
   .buffrow .bf small { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font: 700 8px/1 sans-serif; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 0 3px #000; }
@@ -209,6 +219,7 @@
 </div>
 <div id="status" class="panel"><span class="muted">Connecting…</span></div>
 <div id="tip" class="panel"></div>
+<div id="grouptip"></div>
 <div id="error" class="panel"></div>
 <script>
 "use strict";
@@ -616,7 +627,7 @@ $("enrows").addEventListener("click", e => {
 function renderGroup(group) {
   if (!group) return;
   $("members").innerHTML = group.map(m =>
-    `<div class="member"><div class="who"><b class="${m.leader ? "lead" : ""}">${esc(m.name)}</b>` +
+    `<div class="member" data-member="${esc(m.name)}"><div class="who"><b class="${m.leader ? "lead" : ""}">${esc(m.name)}</b>` +
     `<span class="muted">${esc(m.cls)} ${m.level}${m.here ? "" : " &middot; away"}</span></div>` +
     bar("hp", m.hp) + (m.has_mana ? bar("mana", m.mana) : "") +
     (m.exp !== undefined ? `<div class="xprow" title="Experience through level ${m.level}"><b>XP</b>${bar("xp", m.exp)}<span>${m.exp.toFixed(1)}%</span></div>` : "") +
@@ -628,6 +639,63 @@ function renderGroup(group) {
 }
 const fmtTicksShort = t => { const s = t * 6; return s >= 3600 ? Math.round(s / 3600) + "h" : s >= 60 ? Math.round(s / 60) + "m" : s + "s"; };
 const fmtTicks = t => { const s = t * 6; return s >= 3600 ? Math.round(s / 360) / 10 + " h" : s >= 60 ? Math.round(s / 60) + " m" : s + " s"; };
+
+// ---- group member gear hover ----
+// the dashboard (port 8766 or the public proxy) has /api/character/<leader> with the gear for
+// the leader and all its bots; we fetch it once per leader (or when the group composition changes)
+const WORN_SLOTS = ["Charm","Ear","Head","Face","Ear","Neck","Shoulders","Arms","Back",
+  "Wrist","Wrist","Range","Hands","Primary","Secondary","Finger","Finger","Chest","Legs","Feet","Waist","Power Source","Ammo"];
+const MEMBER_ITEMS = new Map();   // name -> worn items array (slot 0-22)
+let loadedLeader = "";
+const dashOrigin = () => /^\/map\/\d+\//.test(location.pathname)
+  ? location.origin                                               // accessed through the public proxy at the same origin
+  : `${location.protocol}//${location.hostname}:8766`;           // direct LAN access
+const allaOrigin = () => `${location.protocol}//${location.hostname}:8084`;
+
+async function loadGear(leaderName) {
+  if (loadedLeader === leaderName) return;
+  loadedLeader = leaderName;
+  MEMBER_ITEMS.clear();
+  try {
+    const r = await fetch(`${dashOrigin()}/api/character/${encodeURIComponent(leaderName)}`, {cache: "no-store"});
+    if (!r.ok) return;
+    const c = await r.json();
+    const store = (name, items) => MEMBER_ITEMS.set(name, (items || []).filter(i => i.slot <= 22));
+    store(c.name, c.items || []);
+    for (const b of c.bots || []) store(b.name, b.items || []);
+  } catch {}
+}
+
+const grouptip = $("grouptip");
+function showGrouptip(name, x, y) {
+  const items = MEMBER_ITEMS.get(name);
+  if (!items) { grouptip.style.display = "none"; return; }
+  const bySlot = {}; for (const i of items) bySlot[i.slot] = i;
+  const cell = (s) => {
+    const i = bySlot[s];
+    if (!i) return `<div class="gt-slot empty" title="${WORN_SLOTS[s] || ""}"></div>`;
+    const tip = [i.name, i.ac && "AC "+i.ac, i.hp && "HP "+i.hp, i.mana && "Mana "+i.mana, i.damage && i.damage+"/"+i.delay].filter(Boolean).join(" · ");
+    return `<div class="gt-slot" title="${esc(tip)}"><img src="${allaOrigin()}/images/icons/item_${i.icon}.png" alt="${esc(i.name)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:this.alt.slice(0,8),style:'font-size:7px;padding:2px'}))"><span class="gt-slotlabel">${esc(WORN_SLOTS[s]||"")}</span></div>`;
+  };
+  grouptip.innerHTML = `<div class="gt-name">${esc(name)}</div><div class="gt-grid">${Array.from({length:23},(_,s)=>cell(s)).join("")}</div>`;
+  grouptip.style.display = "block";
+  const tw = grouptip.offsetWidth, th = grouptip.offsetHeight;
+  grouptip.style.left = Math.min(x + 16, innerWidth - tw - 8) + "px";
+  grouptip.style.top  = Math.min(y + 16, innerHeight - th - 8) + "px";
+}
+
+$("members").addEventListener("mouseover", e => {
+  const row = e.target.closest("[data-member]");
+  if (!row) { grouptip.style.display = "none"; return; }
+  showGrouptip(row.dataset.member, e.clientX, e.clientY);
+});
+$("members").addEventListener("mousemove", e => {
+  if (grouptip.style.display === "none") return;
+  const tw = grouptip.offsetWidth, th = grouptip.offsetHeight;
+  grouptip.style.left = Math.min(e.clientX + 16, innerWidth - tw - 8) + "px";
+  grouptip.style.top  = Math.min(e.clientY + 16, innerHeight - th - 8) + "px";
+});
+$("members").addEventListener("mouseleave", () => { grouptip.style.display = "none"; });
 
 // the chat window: the server's message types are the client's colour numbers; the user colours (256 on) are the
 // defaults of its chat settings. A line's group (for the filters): chat, combat, spells, loot, other.
@@ -803,6 +871,7 @@ function connect() {
     if (state.connected && $("follow").checked) { view.cx = -state.me.x; view.cy = -state.me.y; }
     updateStatus(); draw(); showTip(); renderGroup(state.group); renderEnemies(state); renderPlan(state.plan); appendLog(state.log); appendChat(state.chat);
     if (state.connected) $("where").textContent = `${state.me.name} · ${state.zone_name}`;
+    if (state.connected) loadGear(state.me.name);  // fetch leader + bot gear once; hover popup in #group
     if (state.connected) {
       const b3 = $("to3d"), proxied = /^\/map\/\d+\//.test(location.pathname), ev = proxied ? location.pathname + "events" : location.origin + "/events";
       b3.hidden = false;
