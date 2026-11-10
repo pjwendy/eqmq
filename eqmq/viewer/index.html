@@ -647,10 +647,13 @@ const WORN_SLOTS = ["Charm","Ear","Head","Face","Ear","Neck","Shoulders","Arms",
   "Wrist","Wrist","Range","Hands","Primary","Secondary","Finger","Finger","Chest","Legs","Feet","Waist","Power Source","Ammo"];
 const MEMBER_ITEMS = new Map();   // name -> worn items array (slot 0-22)
 let loadedLeader = "";
+let allaBase = "";   // set once from /api/character response (alla_url from the dashboard)
 const dashOrigin = () => /^\/map\/\d+\//.test(location.pathname)
   ? location.origin                                               // accessed through the public proxy at the same origin
   : `${location.protocol}//${location.hostname}:8766`;           // direct LAN access
-const allaOrigin = () => `${location.protocol}//${location.hostname}:8084`;
+// item icons: through the proxy they live at the same origin (the Codex handles /images/...);
+// direct LAN access they're on the Codex at :8084
+const iconBase = () => allaBase || (location.origin + "/");
 
 async function loadGear(leaderName) {
   if (loadedLeader === leaderName) return;
@@ -660,6 +663,9 @@ async function loadGear(leaderName) {
     const r = await fetch(`${dashOrigin()}/api/character/${encodeURIComponent(leaderName)}`, {cache: "no-store"});
     if (!r.ok) return;
     const c = await r.json();
+    // alla_url is "" (use same origin via proxy) or an absolute URL for direct LAN access
+    if (c.alla_url) allaBase = c.alla_url;
+    else if (!allaBase) allaBase = `${location.protocol}//${location.hostname}:8084/`;
     const store = (name, items) => MEMBER_ITEMS.set(name, (items || []).filter(i => i.slot <= 22));
     store(c.name, c.items || []);
     for (const b of c.bots || []) store(b.name, b.items || []);
@@ -667,17 +673,21 @@ async function loadGear(leaderName) {
 }
 
 const grouptip = $("grouptip");
+let tipMember = "";   // the member name currently shown; skip rebuild if unchanged (renderGroup rerenders every frame)
 function showGrouptip(name, x, y) {
   const items = MEMBER_ITEMS.get(name);
-  if (!items) { grouptip.style.display = "none"; return; }
-  const bySlot = {}; for (const i of items) bySlot[i.slot] = i;
-  const cell = (s) => {
-    const i = bySlot[s];
-    if (!i) return `<div class="gt-slot empty" title="${WORN_SLOTS[s] || ""}"></div>`;
-    const tip = [i.name, i.ac && "AC "+i.ac, i.hp && "HP "+i.hp, i.mana && "Mana "+i.mana, i.damage && i.damage+"/"+i.delay].filter(Boolean).join(" · ");
-    return `<div class="gt-slot" title="${esc(tip)}"><img src="${allaOrigin()}/images/icons/item_${i.icon}.png" alt="${esc(i.name)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:this.alt.slice(0,8),style:'font-size:7px;padding:2px'}))"><span class="gt-slotlabel">${esc(WORN_SLOTS[s]||"")}</span></div>`;
-  };
-  grouptip.innerHTML = `<div class="gt-name">${esc(name)}</div><div class="gt-grid">${Array.from({length:23},(_,s)=>cell(s)).join("")}</div>`;
+  if (!items) { grouptip.style.display = "none"; tipMember = ""; return; }
+  if (name !== tipMember) {   // only rebuild the HTML when the member changes
+    tipMember = name;
+    const bySlot = {}; for (const i of items) bySlot[i.slot] = i;
+    const cell = (s) => {
+      const i = bySlot[s];
+      if (!i) return `<div class="gt-slot empty" title="${WORN_SLOTS[s] || ""}"></div>`;
+      const tip = [i.name, i.ac && "AC "+i.ac, i.hp && "HP "+i.hp, i.mana && "Mana "+i.mana, i.damage && i.damage+"/"+i.delay].filter(Boolean).join(" · ");
+      return `<div class="gt-slot" title="${esc(tip)}"><img src="${iconBase()}images/icons/item_${i.icon}.png" alt="${esc(i.name)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:this.alt.slice(0,8),style:'font-size:7px;padding:2px'}))"><span class="gt-slotlabel">${esc(WORN_SLOTS[s]||"")}</span></div>`;
+    };
+    grouptip.innerHTML = `<div class="gt-name">${esc(name)}</div><div class="gt-grid">${Array.from({length:23},(_,s)=>cell(s)).join("")}</div>`;
+  }
   grouptip.style.display = "block";
   const tw = grouptip.offsetWidth, th = grouptip.offsetHeight;
   grouptip.style.left = Math.min(x + 16, innerWidth - tw - 8) + "px";
@@ -695,7 +705,7 @@ $("members").addEventListener("mousemove", e => {
   grouptip.style.left = Math.min(e.clientX + 16, innerWidth - tw - 8) + "px";
   grouptip.style.top  = Math.min(e.clientY + 16, innerHeight - th - 8) + "px";
 });
-$("members").addEventListener("mouseleave", () => { grouptip.style.display = "none"; });
+$("members").addEventListener("mouseleave", () => { grouptip.style.display = "none"; tipMember = ""; });
 
 // the chat window: the server's message types are the client's colour numbers; the user colours (256 on) are the
 // defaults of its chat settings. A line's group (for the filters): chat, combat, spells, loot, other.
