@@ -17,7 +17,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Raid, Spawn, Zone, WORLD_CONTAINER, WORLD_SLOT
 
-SDK_VERSION = "eqmq/0.20"
+SDK_VERSION = "eqmq/0.21"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -201,6 +201,13 @@ class CommandResult:
     def __bool__(self) -> bool:
         return self.ok
 
+
+
+def _drop(waiting: list, fut) -> None:
+    """Take a waiter off its list if it's still there: the answer that resolves it can come first and clear the list
+    (ValueError: list.remove(x) in route_length and zone_plan, eq2, 9 Nov; the loot waiters' KeyError the same way)."""
+    if fut in waiting:
+        waiting.remove(fut)
 
 class Bot:
     def __init__(self, network: INetworkClient, token: str, character: str, eqstr: str | None = None):
@@ -467,7 +474,7 @@ class Bot:
         result = await self.command(cmd)
         if not result:
             if fut in self._move_waiters:  # (a move event may have taken the waiters already)
-                self._move_waiters.remove(fut)
+                _drop(self._move_waiters, fut)
             return MoveResult("REFUSED", *(self._pos()), Error=result.error)
         try:
             return await asyncio.wait_for(fut, timeout)
@@ -571,7 +578,7 @@ class Bot:
         result = await self.command(cmd)
         if not result:
             if fut in self._move_waiters:  # (a move event may have taken the waiters already)
-                self._move_waiters.remove(fut)
+                _drop(self._move_waiters, fut)
             return MoveResult("REFUSED", *(self._pos()), Error=result.error)
         try:
             return await asyncio.wait_for(fut, timeout)
@@ -590,7 +597,7 @@ class Bot:
         fut = asyncio.get_running_loop().create_future()
         self._plan_waiters.append(fut)
         if not await self.command(cmd):
-            self._plan_waiters.remove(fut)
+            _drop(self._plan_waiters, fut)
             return None
         try:
             plan = await asyncio.wait_for(fut, timeout)
@@ -614,7 +621,7 @@ class Bot:
         fut = asyncio.get_running_loop().create_future()
         self._plan_waiters.append(fut)
         if not await self.command(cmd):
-            self._plan_waiters.remove(fut)
+            _drop(self._plan_waiters, fut)
             return None
         try:
             return await asyncio.wait_for(fut, timeout)
@@ -765,7 +772,7 @@ class Bot:
         cmd = pb.Command()
         cmd.consider.spawn_id = spawn_id
         if not await self.command(cmd):
-            self._consider_waiters[spawn_id].remove(fut)
+            _drop(self._consider_waiters.get(spawn_id, []), fut)
             return None
         try:
             return await asyncio.wait_for(fut, timeout)
@@ -781,7 +788,11 @@ class Bot:
         cmd.loot.corpse_id = corpse_id
         result = await self.command(cmd)
         if not result:
-            self._loot_waiters[corpse_id].remove(fut)
+            # (the corpse's answer can come before the command's failure and take the waiters with it: a KeyError
+            # that ended the camp loop, 13 times in a day on the three servers, 9 Nov)
+            waiting = self._loot_waiters.get(corpse_id, [])
+            if fut in waiting:
+                waiting.remove(fut)
             return LootResult(corpse_id, False, result.error)
         try:
             return await asyncio.wait_for(fut, timeout)
@@ -797,7 +808,7 @@ class Bot:
         cmd.merchant.npc_id = npc_id
         cmd.merchant.open = True
         if not await self.command(cmd):
-            self._merchant_waiters[npc_id].remove(fut)
+            _drop(self._merchant_waiters.get(npc_id, []), fut)
             return None
         try:
             return await asyncio.wait_for(fut, timeout)
@@ -1174,7 +1185,7 @@ class Bot:
         result = await self.say(f"#zone {short_name}")
         if not result:
             if fut in self._zone_waiters:  # (a lost connection clears the waiters itself)
-                self._zone_waiters.remove(fut)
+                _drop(self._zone_waiters, fut)
             return ZoneChange("REFUSED", short_name, 0, result.error)
         try:
             return await asyncio.wait_for(fut, timeout)
