@@ -66,11 +66,14 @@
     background: var(--panel); border: 1px solid var(--me); border-radius: 8px; padding: 8px;
     box-shadow: 0 4px 16px #0004; font-size: 12px; color: var(--text); }
   #grouptip .gt-name { font-weight: 600; color: var(--me); margin-bottom: 5px; font-size: 13px; }
-  #grouptip .gt-grid { display: grid; grid-template-columns: repeat(4, 40px); gap: 2px; }
-  #grouptip .gt-slot { width: 40px; height: 40px; position: relative; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; background: var(--track); }
-  #grouptip .gt-slot img { width: 100%; height: 100%; image-rendering: auto; display: block; }
-  #grouptip .gt-slot.empty { opacity: .4; }
-  #grouptip .gt-slotlabel { position: absolute; left: 0; right: 0; bottom: 0; font: 700 6px/1 sans-serif; text-align: center; color: #fff; text-shadow: 0 0 2px #000; overflow: hidden; white-space: nowrap; padding: 1px; }
+  /* the profile page's paper doll (guild/dashboard/character.html .paper): four 44px cells a row, the border inside the cell (the
+     cells were 40px plus their border in 40px columns, each overlapping the next: the operator, 12 Nov, "misaligned") */
+  #grouptip .gt-grid { display: grid; grid-template-columns: repeat(4, 44px); grid-auto-rows: 44px; gap: 4px; }
+  #grouptip .gt-slot { box-sizing: border-box; width: 44px; height: 44px; position: relative; border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden; background: var(--track); display: flex; align-items: center; justify-content: center; }
+  #grouptip .gt-slot img { width: 40px; height: 40px; image-rendering: auto; display: block; }
+  #grouptip .gt-slot.empty { opacity: .55; font: 600 8px/1.1 sans-serif; color: var(--muted, #9aa); text-transform: uppercase; text-align: center; }
+  #grouptip .gt-slot .gt-nm { font: 8px/1.1 sans-serif; color: var(--muted, #9aa); padding: 2px; text-align: center; overflow: hidden; }
   #group .member { margin: 6px 0 2px; cursor: default; }
   .buffrow { display: flex; flex-wrap: nowrap; gap: 1px; margin-top: 3px; overflow: hidden; } .buffrow .bf { position: relative; flex: 1 1 0; min-width: 6px; max-width: 24px; aspect-ratio: 1; border-radius: 2px; overflow: hidden; background: var(--border); cursor: default; }
   .buffrow .bf img { width: 100%; height: 100%; display: block; image-rendering: auto; } .buffrow .bf i { font: normal 9px/1 sans-serif; color: var(--muted); position: absolute; inset: 0; display: grid; place-items: center; }
@@ -673,6 +676,8 @@ async function loadGear(leaderName) {
 }
 
 const grouptip = $("grouptip");
+// the equipment window's places, four across (the profile page's PAPER, guild/dashboard/character.html); null: an empty corner
+const GT_PAPER = [[1, 2, 3, 4], [5, 6, 8, 0], [17, 7, 12, 20], [9, 15, 16, 10], [18, 19, 11, 22], [13, 14, 21, null]];
 let tipMember = "";   // the member name currently shown; skip rebuild if unchanged (renderGroup rerenders every frame)
 function showGrouptip(name, x, y) {
   const items = MEMBER_ITEMS.get(name);
@@ -682,11 +687,12 @@ function showGrouptip(name, x, y) {
     const bySlot = {}; for (const i of items) bySlot[i.slot] = i;
     const cell = (s) => {
       const i = bySlot[s];
-      if (!i) return `<div class="gt-slot empty" title="${WORN_SLOTS[s] || ""}"></div>`;
+      if (s === null) return "<span></span>";
+      if (!i) return `<div class="gt-slot empty">${esc(WORN_SLOTS[s] || "")}</div>`;
       const tip = [i.name, i.ac && "AC "+i.ac, i.hp && "HP "+i.hp, i.mana && "Mana "+i.mana, i.damage && i.damage+"/"+i.delay].filter(Boolean).join(" · ");
-      return `<div class="gt-slot" title="${esc(tip)}"><img src="${iconBase()}images/icons/item_${i.icon}.png" alt="${esc(i.name)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:this.alt.slice(0,8),style:'font-size:7px;padding:2px'}))"><span class="gt-slotlabel">${esc(WORN_SLOTS[s]||"")}</span></div>`;
+      return `<div class="gt-slot" title="${esc(tip)}"><img src="${iconBase()}images/icons/item_${i.icon}.png" alt="${esc(i.name)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'gt-nm',textContent:this.alt.slice(0,16)}))"></div>`;
     };
-    grouptip.innerHTML = `<div class="gt-name">${esc(name)}</div><div class="gt-grid">${Array.from({length:23},(_,s)=>cell(s)).join("")}</div>`;
+    grouptip.innerHTML = `<div class="gt-name">${esc(name)}</div><div class="gt-grid">${GT_PAPER.flat().map(cell).join("")}</div>`;
   }
   grouptip.style.display = "block";
   const tw = grouptip.offsetWidth, th = grouptip.offsetHeight;
