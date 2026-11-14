@@ -104,7 +104,7 @@ mob died shows up in state and events, as it would on a player's screen.
 | `gm_zone(short_name)` | `#zone` there (needs GM status). |
 | `cast(spell, target, wait=False)`, `stopcast()`, `memorize(gem, spell)`, `scribe(scroll)` | Spells, by gem number or name. |
 | `consider(spawn)` | A `Consider`: `Color` (`green`, `lightblue`, `blue`, `white`, `yellow`, `red`, `grey`) and `Faction` (`ally` ... `scowls`). |
-| `loot(corpse)` | Loot a corpse. A `LootResult`: the `Items` taken, and coin. |
+| `loot(corpse, peek=False, only=None)` | Loot a corpse. A `LootResult`: the `Items` taken, coin, and what's `Left` on it. `peek`: take nothing, see what's there (`Left`); `only`: take just these item names. The server refuses every item while something is on the cursor. |
 | `open_merchant(npc)`, `buy(npc, slot, qty)`, `sell(npc, item, qty)`, `close_merchant(npc)` | Shopping. `open_merchant` returns the merchant's list. |
 | `send_parcel(npc, item, to, note)`, `retrieve_parcel(npc, parcel)` | Parcels, at an open parcel merchant: `open_merchant` returns `ParcelMerchant` and the `Parcels` waiting for you (`Parcel`: `Name`, `Quantity`, `From`, `Note`). Not attuned items, nor no-drop ones unless the server lets no-drop be traded (`World:FVNoDropFlag`); one parcel every 30 seconds. |
 | `move_item(from_slot, to_slot)` | Move items between inventory, bags, worn slots and the bank. |

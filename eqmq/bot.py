@@ -791,13 +791,19 @@ class Bot:
         except asyncio.TimeoutError:
             return None
 
-    async def loot(self, corpse: Spawn | int, timeout: float = 10) -> LootResult:
-        """Loot everything from a corpse (walk within ~10 units first)."""
+    async def loot(self, corpse: Spawn | int, timeout: float = 10, peek: bool = False, only: list[str] | None = None) -> LootResult:
+        """Loot everything from a corpse (walk within ~10 units first). peek: take nothing, only see what's on it (Left; the coin is
+        taken, as opening it does). only: take just these items (a name each), the rest left on it (a raid's drops shared out).
+        The server refuses every item while something is on the cursor (empty it first)."""
         corpse_id = corpse if isinstance(corpse, int) else corpse.ID
         fut = asyncio.get_running_loop().create_future()
         self._loot_waiters.setdefault(corpse_id, []).append(fut)
         cmd = pb.Command()
         cmd.loot.corpse_id = corpse_id
+        cmd.loot.peek = peek
+        cmd.loot.only.extend(only or [])
+        if only:
+            timeout = max(timeout, 2 + len(only))
         result = await self.command(cmd)
         if not result:
             # (the corpse's answer can come before the command's failure and take the waiters with it: a KeyError
