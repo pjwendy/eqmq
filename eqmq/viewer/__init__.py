@@ -29,6 +29,7 @@ import re
 import time
 from importlib import resources
 
+from .. import tlo
 from ..plugin import MQPlugin
 from .navmesh import NavStore
 
@@ -245,6 +246,18 @@ class MapViewer(MQPlugin):
             return {"connected": False, "phase": "in" if bot.connected else "out"}
         group = []
         members = bot.Group.All if bot.Group else ()
+        if len(members) <= 1:
+            # in a raid the server takes everyone out of their group and into a raid group: Group is empty (or just us) and the maps showed
+            # Bifar alone in eq1's Nagafen raid, his bots unseen (the operator, 14 Nov). Our raid group then, else our own bots
+            raid = bot.Raid
+            mine = raid.Member(me.Name) if raid else None
+            if mine is not None and mine.Group < 12:
+                members = tuple(tlo.GroupMember(r.Name, r.ID, r.GroupLeader, r.Bot) for r in raid.Group(mine.Group))
+            elif raid is not None or not members:
+                members = (tlo.GroupMember(me.Name, me.ID, not raid, False),) + tuple(
+                    tlo.GroupMember(b.Name, b.ID, False, True, b.Buffs) for b in bot.Bots())
+                if len(members) == 1:
+                    members = ()
         names = [m.Name for m in members] or [me.Name]
         spawns = {s.ID: s for s in bot.Spawns()}
         for name in names:
@@ -261,7 +274,7 @@ class MapViewer(MQPlugin):
             group.append({"id": s.ID if s else 0, "name": name, "cls": CLASS_SHORT.get(s.ClassID, "?") if s else "?", "cid": s.ClassID if s else 0, "level": s.Level if s else 0,
                           "hp": s.PctHPs if s else 0, "mana": s.PctMana if s else 0,
                           "has_mana": bool(s and s.ClassID not in NO_MANA), "leader": bool(m and m.Leader),
-                          "here": s is not None, "buffs": self._buff_rows(m.Buffs if m else ())})
+                          "here": s is not None, "buffs": self._buff_rows((m.Buffs if m else ()) or (s.Buffs if s else ()))})
         plan = None
         if self.plan:
             try:
