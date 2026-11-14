@@ -261,7 +261,17 @@ class Bot:
             await self.close()
             raise TimeoutError("no snapshot from the server")
 
-    async def close(self) -> None:
+    async def close(self, hold: bool = False) -> None:
+        """End the session: the character logs out. A program that goes away without closing (it crashed, or it's restarting) leaves its
+        characters held by the server, frozen with their fights, for its next connect to take back (bot.resumed); hold=True closes the same
+        way on purpose."""
+        if not hold and not self._closed.is_set():
+            try:
+                bye = pb.ClientFrame()
+                bye.goodbye.SetInParent()
+                await asyncio.wait_for(self._net.send(bye), 2.0)
+            except (ConnectionError, OSError, asyncio.TimeoutError):
+                pass  # (already gone: nothing to hold either way)
         await self._net.close()
         if self._receiver:
             self._receiver.cancel()
