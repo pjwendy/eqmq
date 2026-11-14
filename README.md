@@ -47,7 +47,10 @@ async def main():
 asyncio.run(main())
 ```
 
-`connect` returns once the character is in its zone and the first snapshot has arrived. From then
+`connect` returns once the character is in its zone and the first snapshot has arrived. If your
+program went away without closing the session (a crash or a restart), the server held the character
+frozen, with its bots and its fights, and `connect` takes that session back: `bot.resumed` is `True`
+and everything is as it was when you left. From then
 on the SDK keeps a mirror of the character's state, updated four times a second. Everything you
 read is a frozen snapshot of that mirror, so reading is free and never waits on the network.
 

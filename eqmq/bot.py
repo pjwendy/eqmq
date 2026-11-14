@@ -236,6 +236,7 @@ class Bot:
         self._patterns: list[tuple[EventPattern, Callable]] = []
         self.session_id = ""
         self.spawn_id = 0
+        self.resumed = False  # Welcome.resumed: a session the server held (HeadlessClients:HoldSeconds) taken back, bots and fights as they were
 
     # ---- lifecycle ----
 
@@ -284,7 +285,8 @@ class Bot:
                 if kind == "welcome":
                     self.session_id = frame.welcome.session_id
                     self.spawn_id = frame.welcome.spawn_id
-                    log.info("welcome: session %s spawn %d", self.session_id, self.spawn_id)
+                    self.resumed = frame.welcome.resumed
+                    log.info("welcome: session %s spawn %d%s", self.session_id, self.spawn_id, " (resumed)" if self.resumed else "")
                 elif kind == "result":
                     fut = self._pending.pop(frame.result.id, None)
                     if fut and not fut.done():
