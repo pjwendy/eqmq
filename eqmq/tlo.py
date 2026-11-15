@@ -172,6 +172,9 @@ class Resists:
         return Resists(r.magic, r.cold, r.fire, r.poison, r.disease)
 
 
+NO_RESISTS = Resists()  # (a default for fields declared after a field named Resists, which hides the class in the class body)
+
+
 @dataclass(frozen=True)
 class BotGear:
     """One of your EQEmu bots and what it wears (Item.Slot is the worn slot)."""
@@ -184,6 +187,7 @@ class BotGear:
     Equipment: tuple = ()
     Resists: Resists = Resists()
     Buffs: tuple = ()  # Buff, what is on it now, with slots
+    GearResists: Resists = NO_RESISTS  # without its buffs: base, gear, AAs (all zero from an older server)
 
     def Worn(self, slot: int) -> "Item | None":
         return next((i for i in self.Equipment if i.Slot == slot), None)
@@ -192,7 +196,7 @@ class BotGear:
     def from_pb(b: pb.BotGear) -> "BotGear":
         return BotGear(b.spawn_id, b.name, b.class_id, b.race_id, b.level, b.race_bit,
                        tuple(Item.from_pb(i) for i in b.equipment), Resists.from_pb(b.resists),
-                       tuple(Buff(x.spell_id, x.name, x.ticks, x.slot) for x in b.buffs))
+                       tuple(Buff(x.spell_id, x.name, x.ticks, x.slot) for x in b.buffs), Resists.from_pb(b.gear_resists))
 
 
 @dataclass(frozen=True)
@@ -344,6 +348,7 @@ class Me:
     BankMoney: int = 0      # the coin in our bank, in copper (bot.bank_coin moves it, beside a banker)
     Gender: int = 0         # 0 male, 1 female, 2 neutral
     Resists: Resists = Resists()  # magic, cold, fire, poison, disease now
+    GearResists: Resists = NO_RESISTS  # the same without our buffs: base, gear, AAs (all zero from an older server)
 
     @property
     def Night(self) -> bool:
@@ -413,7 +418,7 @@ class Me:
             Weight=m.weight, Capacity=m.capacity, RaceBit=m.race_bit,
             ExpPct=m.exp_pct, AAExpPct=m.aa_exp_pct, AAPoints=m.aa_points, AASplit=m.aa_split, RunSpeed=m.run_speed,
             Disciplines=tuple(m.disciplines), GameHour=m.game_hour, Air=m.air, MaxAir=m.max_air, BankMoney=m.bank_copper,
-            Resists=Resists.from_pb(m.resists),
+            Resists=Resists.from_pb(m.resists), GearResists=Resists.from_pb(m.gear_resists),
         )
 
 
