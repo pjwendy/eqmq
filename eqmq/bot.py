@@ -850,7 +850,9 @@ class Bot:
     async def give(self, npc: Spawn | int, item: Item | int, quantity: int = 0,
                    more: list[tuple[Item | int, int]] | None = None) -> CommandResult:
         """Hand an item from your inventory (all of a stack by default) to an NPC beside you, as the trade
-        window does: its script takes it (a quest's hand-in). Not while it's fighting. more: further
+        window does: its script takes it (a quest's hand-in). Not while it's fighting. A player of your guild
+        that is a headless session in the same zone works too (the server plays both sides of the trade window;
+        a no-drop item is refused). more: further
         (item or slot, quantity) in the same trade, up to seven (a hand-in of several: the script looks at
         the whole trade)."""
         slot = item if isinstance(item, int) else item.Slot
