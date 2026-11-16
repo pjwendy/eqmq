@@ -24,7 +24,7 @@ log = logging.getLogger("eqmq")
 # combat abilities (EQ skill numbers), for ability() and /doability
 ABILITIES = {"backstab": 8, "bash": 10, "slam": 10, "dragon punch": 21, "tail rake": 21, "eagle strike": 23,
              "feign death": 25, "flying kick": 26, "hide": 29, "kick": 30, "round kick": 38, "sneak": 42,
-             "tiger claw": 52, "intimidation": 71, "taunt": 73, "frenzy": 74}
+             "tiger claw": 52, "intimidation": 71, "taunt": 73, "frenzy": 74, "forage": 27}
 
 # pet commands (EQEmu's PetCommand numbers), for pet() and /pet
 PET_COMMANDS = {"health": 0, "leader": 1, "attack": 2, "qattack": 3, "follow": 4, "guard": 5, "sit": 6,
