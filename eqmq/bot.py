@@ -1132,6 +1132,14 @@ class Bot:
         cmd.buff_remove.slot = slot
         return await self.command(cmd)
 
+    async def heal_hold(self, seconds: float) -> CommandResult:
+        """No heal on yourself from bots for `seconds` (at most 600; 0 lifts it): a raid puller on a hate list before the main tank has its
+        mob, since a heal on someone hated puts the healer on every hate list that has them. Bots skip you as a heal target, and their
+        group heals while you're in reach."""
+        cmd = pb.Command()
+        cmd.heal_hold.seconds = max(0, min(600, int(math.ceil(seconds))))
+        return await self.command(cmd)
+
     async def raid_invite(self, who: Spawn | str | None = None) -> CommandResult:
         """Invite into your raid (making one with you and your group if you have none), as the raid window's invite: a player who is
         ungrouped or leads a group (the group comes too), or a bot of yours (ungrouped or leading a bot group). A headless character
