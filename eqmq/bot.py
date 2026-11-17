@@ -24,7 +24,8 @@ log = logging.getLogger("eqmq")
 # combat abilities (EQ skill numbers), for ability() and /doability
 ABILITIES = {"backstab": 8, "bash": 10, "slam": 10, "dragon punch": 21, "tail rake": 21, "eagle strike": 23,
              "feign death": 25, "flying kick": 26, "hide": 29, "kick": 30, "round kick": 38, "sneak": 42,
-             "tiger claw": 52, "intimidation": 71, "taunt": 73, "frenzy": 74, "forage": 27}
+             "tiger claw": 52, "intimidation": 71, "taunt": 73, "frenzy": 74, "forage": 27,
+             "throwing": 51, "archery": 7}
 
 # pet commands (EQEmu's PetCommand numbers), for pet() and /pet
 PET_COMMANDS = {"health": 0, "leader": 1, "attack": 2, "qattack": 3, "follow": 4, "guard": 5, "sit": 6,
@@ -708,6 +709,7 @@ class Bot:
     async def ability(self, which: str | int) -> CommandResult:
         """Use a combat ability as the client's ability buttons do, by name or EQ skill number: kick,
         bash (slam), backstab, taunt, frenzy, intimidation and the monk strikes act on your target;
+        throwing and archery are the range button (what's in the range slot, at your target);
         sneak, hide and feign death on you. The server checks the skill and its reuse timer (it says
         "Ability recovery time not yet met." if you're early). As /doability."""
         skill = which if isinstance(which, int) else ABILITIES.get(which.lower().strip())
