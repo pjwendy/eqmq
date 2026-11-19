@@ -10,6 +10,9 @@ from dataclasses import dataclass
 
 from .proto import headless_pb2 as pb
 
+# why one of our bots didn't cast (Spawn.BotSkip, the server's Bot::NoteSkip)
+BOT_SKIPS = {0: "", 1: "incapacitated", 2: "held", 3: "catching up", 4: "no mana", 5: "out of range", 6: "no line of sight", 7: "recast",
+             8: "no reagents", 9: "would pull aggro", 10: "busy", 11: "silenced"}
 _SPAWN_TYPES = {
     pb.SPAWN_TYPE_PLAYER: "PC",
     pb.SPAWN_TYPE_NPC: "NPC",
@@ -225,6 +228,8 @@ class Spawn:
     AssistRange: float = 0.0  # an NPC: the radius in which it calls others to help
     Aggro: int = 0            # an NPC with an aggro range: bits 1 hostile on sight (KOS), 2 may aggro (threatening), 4 aggros even a character it cons grey to
     Buffs: tuple = ()         # an NPC that is fighting (or has us on its hate list): the spells on it (Buff), our slows, roots, mezzes and damage over time
+    BotSkip: int = 0          # one of our own bots: why its AI last didn't cast, in the last 3 s (BOT_SKIPS; 0 nothing refused)
+    BotSkipType: int = 0      # ... the bot spell type it refused (1 regular heal, ...; 65535: not a spell's reason)
     _me_x: float = 0.0
     _me_y: float = 0.0
     _me_z: float = 0.0
@@ -301,7 +306,7 @@ class Spawn:
         return Spawn(
             ID=s.id, Name=s.name, Type=type_name, Level=s.level, ClassID=s.class_id,
             RaceID=s.race_id, X=s.x, Y=s.y, Z=s.z, Heading=s.heading, PctHPs=s.hp_pct,
-            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, CastingID=s.casting_spell_id, Status=s.status, AggroRange=s.aggro_range, AssistRange=s.assist_range, Aggro=s.aggro, Buffs=tuple(Buff(b.spell_id, b.name, b.ticks, b.slot) for b in s.buffs), _me_x=me_x, _me_y=me_y, _me_z=me_z,
+            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, CastingID=s.casting_spell_id, Status=s.status, AggroRange=s.aggro_range, AssistRange=s.assist_range, Aggro=s.aggro, Buffs=tuple(Buff(b.spell_id, b.name, b.ticks, b.slot) for b in s.buffs), BotSkip=getattr(s, 'bot_skip', 0), BotSkipType=getattr(s, 'bot_skip_spell_type', 0), _me_x=me_x, _me_y=me_y, _me_z=me_z,
         )
 
 
