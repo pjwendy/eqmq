@@ -7,7 +7,7 @@ plugins all work the way MQ2 users expect. No MacroQuest code is used: only the 
 
 eqmq only works on servers that run the headless module **and whose operator has turned it on and
 given you a token**. Setting up the server is covered in the fork's
-[`docs/headless.md`](https://github.com/pjwendy/eqemu-headless/blob/headless/docs/headless.md).
+[`docs/headless.md`](https://github.com/pjwendy/Server/blob/headless/docs/headless.md).
 
 - [Install](#install)
 - [Quick start](#quick-start)
