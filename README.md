@@ -9,6 +9,11 @@ eqmq only works on servers that run the headless module **and whose operator has
 given you a token**. Setting up the server is covered in the fork's
 [`docs/headless.md`](https://github.com/pjwendy/Server/blob/headless/docs/headless.md).
 
+**Docs:** [getting started](docs/getting-started.md), from a server that allows it to a script that runs for
+days; the [reference](docs/reference.md), every class, property, method and slash command; and the server
+side, [the headless module](https://github.com/pjwendy/Server/blob/headless/docs/headless.md) and
+[its protocol](https://github.com/pjwendy/Server/blob/headless/docs/headless-protocol.md).
+
 - [Install](#install)
 - [Quick start](#quick-start)
 - [What you can read](#what-you-can-read)
@@ -25,8 +30,10 @@ given you a token**. Setting up the server is covered in the fork's
 Python 3.10 or later. The only dependency is `protobuf`.
 
 ```
-pip install -e path/to/eqmq
+pip install git+https://github.com/pjwendy/eqmq
 ```
+
+or, to change it as you go, clone it and `pip install -e eqmq`.
 
 ## Quick start
 
@@ -273,3 +280,8 @@ python examples/run_plugins.py --token hc_... --character Bifar --plugins exampl
 ```
 
 eqmq is released under the GPL, version 3 or later, like EQEmu.
+
+## For maintainers
+
+`docs/reference.md` is generated from the docstrings: run `python tools/gen_reference.py` after changing the
+API. The protocol bindings in `eqmq/proto` come from the server's `headless.proto` (`tools/gen_proto.sh`).
