@@ -17,7 +17,7 @@ from .search import SpawnSearch
 from .state import StateMirror
 from .tlo import CON_COLORS, CURSOR_SLOT, FACTIONS, BookSpell, BotGear, Group, Item, Me, Raid, Spawn, Zone, WORLD_CONTAINER, WORLD_SLOT
 
-SDK_VERSION = "eqmq/0.21"
+SDK_VERSION = "eqmq/0.22"
 COMMAND_TIMEOUT = 10.0
 log = logging.getLogger("eqmq")
 
@@ -1138,6 +1138,16 @@ class Bot:
         group heals while you're in reach."""
         cmd = pb.Command()
         cmd.heal_hold.seconds = max(0, min(600, int(math.ceil(seconds))))
+        return await self.command(cmd)
+
+    async def recover_corpses(self, zone: str = "", x: float = 0.0, y: float = 0.0, z: float = 0.0) -> CommandResult:
+        """Have the server recover your corpses, as a GM would (server rule HeadlessClients:RecoverCorpses; refused, with why, when it's off):
+        every corpse of yours, from wherever it lies, buried ones too, brought to your feet and given a 100% resurrection; loot them after.
+        In `zone` at (x, y, z): moved there first (another zone: only the move, so call it again once you're in); empty and 0: where you
+        stand. "no corpses to recover" when there are none."""
+        cmd = pb.Command()
+        cmd.recover_corpses.zone = zone
+        cmd.recover_corpses.x, cmd.recover_corpses.y, cmd.recover_corpses.z = float(x), float(y), float(z)
         return await self.command(cmd)
 
     async def raid_invite(self, who: Spawn | str | None = None) -> CommandResult:
