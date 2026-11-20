@@ -426,9 +426,13 @@ class Bot:
             return CommandResult(False, "no response from the server")
 
     async def target(self, spawn: Spawn | int | None) -> CommandResult:
-        """Target a spawn (or None to clear). The result means 'asked'; check bot.Target after."""
+        """Target a spawn (or None to clear). The result means 'asked'; check bot.Target after. Targeting yourself (a port, a bind, a corpse
+        summon cast on you) turns auto-attack off first: left on, every round says "Try attacking someone other than yourself"."""
         cmd = pb.Command()
         cmd.target.spawn_id = 0 if spawn is None else (spawn if isinstance(spawn, int) else spawn.ID)
+        me = self.Me
+        if me is not None and cmd.target.spawn_id == me.ID and getattr(me, "Combat", False):
+            await self.attack(False)
         return await self.command(cmd)
 
     async def attack(self, on: bool = True) -> CommandResult:
