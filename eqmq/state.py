@@ -16,12 +16,18 @@ class StateMirror:
         self.book: list[BookSpell] = []
         self.inventory: list[Item] = []
         self.bot_gear: list[BotGear] = []
+        # (the frozen Spawns are built once per change, not per call: building every spawn of the zone on each Spawns() was three
+        # quarters of a 20-leader runner's CPU, profiled 21 Nov)
+        self._ver = 0                                          # bumped by every frame applied
+        self._built: dict[int, tuple[pb.Spawn, Spawn]] = {}    # spawn id: the message it was built from, and the Spawn
+        self._all: tuple[int, list[Spawn]] = (-1, [])          # all_spawns() as of _ver
 
     @property
     def ready(self) -> bool:
         return self.me is not None
 
     def apply(self, frame: pb.ServerFrame) -> None:
+        self._ver += 1
         kind = frame.WhichOneof("payload")
         if kind == "snapshot":
             snap = frame.snapshot
@@ -67,10 +73,33 @@ class StateMirror:
         s = self.spawns.get(spawn_id) if spawn_id else None  # nothing real has id 0
         if s is None or self.me is None:
             return None
-        return Spawn.from_pb(s, self.me.x, self.me.y, self.me.z)
+        return self._tlo(s, self.me.x, self.me.y, self.me.z)
+
+    def _tlo(self, s: pb.Spawn, mx: float, my: float, mz: float) -> Spawn:
+        """The frozen Spawn of this message: the one built before when the message is the same, moved to where we are now."""
+        b = self._built.get(s.id)
+        if b is None or b[0] is not s:
+            t = Spawn.from_pb(s, mx, my, mz)
+            self._built[s.id] = (s, t)
+            return t
+        t = b[1]
+        if t._me_x != mx or t._me_y != my or t._me_z != mz:
+            # (only where we stand changed: a copy with it, not a rebuild from the message)
+            t = object.__new__(Spawn)
+            d = t.__dict__
+            d.update(b[1].__dict__)
+            d["_me_x"], d["_me_y"], d["_me_z"] = mx, my, mz
+            self._built[s.id] = (s, t)
+        return t
 
     def all_spawns(self) -> list[Spawn]:
         if self.me is None:
             return []
+        if self._all[0] == self._ver:
+            return list(self._all[1])
         mx, my, mz = self.me.x, self.me.y, self.me.z
-        return [Spawn.from_pb(s, mx, my, mz) for i, s in self.spawns.items() if i and s.id]
+        out = [self._tlo(s, mx, my, mz) for i, s in self.spawns.items() if i and s.id]
+        if len(self._built) > len(self.spawns) + 64:   # (gone spawns' entries dropped now and then)
+            self._built = {i: b for i, b in self._built.items() if self.spawns.get(i) is b[0]}
+        self._all = (self._ver, out)
+        return list(out)
