@@ -229,6 +229,11 @@ class Bot:
         self._loot_waiters: dict[int, list[asyncio.Future]] = {}
         self._merchant_waiters: dict[int, list[asyncio.Future]] = {}
         self._move_waiters: list[asyncio.Future] = []
+        # a walk started while another is under way: the server stops the old one, and its STOPPED comes as the next move event, which isn't
+        # the new walk's end. Those waiters skip one STOPPED (eq1 25 Nov: Solveig's walk to the Hate stone's seller "couldn't get to" him in
+        # 0.25-1.5 s three times running, the old walk's stop taken for its own, while the server walked her on: 942, 762, 559 units left)
+        self._walking = False
+        self._skip_stop: set[int] = set()
         self._plan_waiters: list[asyncio.Future] = []
         self._zone_waiters: list[asyncio.Future] = []
         self._zoning = False
@@ -484,15 +489,23 @@ class Bot:
         cmd.move_to.x, cmd.move_to.y = x, y
         cmd.move_to.z = z if z is not None else (me.z if me else 0.0)
         cmd.move_to.avoid = avoid
+        replacing = self._walking
         if not wait:
-            return await self.command(cmd)
+            result = await self.command(cmd)
+            if result:
+                self._walking = True
+            return result
         fut = asyncio.get_running_loop().create_future()
+        if replacing:
+            self._skip_stop.add(id(fut))
         self._move_waiters.append(fut)
         result = await self.command(cmd)
         if not result:
+            self._skip_stop.discard(id(fut))
             if fut in self._move_waiters:  # (a move event may have taken the waiters already)
                 _drop(self._move_waiters, fut)
             return MoveResult("REFUSED", *(self._pos()), Error=result.error)
+        self._walking = True
         try:
             return await asyncio.wait_for(fut, timeout)
         except asyncio.TimeoutError:
@@ -591,12 +604,16 @@ class Bot:
         cmd = pb.Command()
         cmd.surface.SetInParent()
         fut = asyncio.get_running_loop().create_future()
+        if self._walking:
+            self._skip_stop.add(id(fut))
         self._move_waiters.append(fut)
         result = await self.command(cmd)
         if not result:
+            self._skip_stop.discard(id(fut))
             if fut in self._move_waiters:  # (a move event may have taken the waiters already)
                 _drop(self._move_waiters, fut)
             return MoveResult("REFUSED", *(self._pos()), Error=result.error)
+        self._walking = True
         try:
             return await asyncio.wait_for(fut, timeout)
         except asyncio.TimeoutError:
@@ -647,6 +664,7 @@ class Bot:
 
     async def stop(self) -> CommandResult:
         """Stop walking."""
+        self._skip_stop.clear()  # (a stop asked for ends the walk under way: its STOPPED is its end)
         cmd = pb.Command()
         cmd.stop.SetInParent()
         return await self.command(cmd)
@@ -1501,9 +1519,17 @@ class Bot:
                         for n in m.nav)
             done = MoveResult(pb.MoveStatus.Name(m.status).removeprefix("MOVE_"), m.x, m.y, m.z, Nav=nav)
             waiters, self._move_waiters = self._move_waiters, []
+            stale = False
             for fut in waiters:
+                if done.Status == "STOPPED" and id(fut) in self._skip_stop:
+                    self._skip_stop.discard(id(fut))  # (the walk this one replaced: not its end)
+                    self._move_waiters.append(fut)
+                    stale = True
+                    continue
+                self._skip_stop.discard(id(fut))
                 if not fut.done():
                     fut.set_result(done)
+            self._walking = stale  # (the new walk goes on after the old one's stop)
             for fn in self._handlers["move"]:
                 await self._call(fn, done)
             return
