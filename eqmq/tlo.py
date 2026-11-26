@@ -303,11 +303,15 @@ class Spawn:
         type_name = _SPAWN_TYPES.get(s.type, "Unknown")
         if type_name == "NPC" and s.owner_id:
             type_name = "Pet"
-        return Spawn(
+        # (built straight into its __dict__: the frozen dataclass's __init__ sets each field through object.__setattr__, and building the
+        # spawns of 36 leaders' zones four times a second was a quarter of a runner's CPU, 26 Nov; the same object, field for field)
+        t = object.__new__(Spawn)
+        t.__dict__.update(
             ID=s.id, Name=s.name, Type=type_name, Level=s.level, ClassID=s.class_id,
             RaceID=s.race_id, X=s.x, Y=s.y, Z=s.z, Heading=s.heading, PctHPs=s.hp_pct,
-            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, CastingID=s.casting_spell_id, Status=s.status, AggroRange=s.aggro_range, AssistRange=s.assist_range, Aggro=s.aggro, Buffs=tuple(Buff(b.spell_id, b.name, b.ticks, b.slot) for b in s.buffs), BotSkip=getattr(s, 'bot_skip', 0), BotSkipType=getattr(s, 'bot_skip_spell_type', 0), _me_x=me_x, _me_y=me_y, _me_z=me_z,
+            OwnerID=s.owner_id, Headless=s.headless, TargetID=s.target_id, PctMana=s.mana_pct, Gender=s.gender, Primary=s.primary, Secondary=s.secondary, CastingID=s.casting_spell_id, Status=s.status, AggroRange=s.aggro_range, AssistRange=s.assist_range, Aggro=s.aggro, Buffs=tuple(Buff(b.spell_id, b.name, b.ticks, b.slot) for b in s.buffs) if s.buffs else (), BotSkip=getattr(s, 'bot_skip', 0), BotSkipType=getattr(s, 'bot_skip_spell_type', 0), _me_x=me_x, _me_y=me_y, _me_z=me_z,
         )
+        return t
 
 
 @dataclass(frozen=True)

@@ -25,6 +25,7 @@ class StateMirror:
         # of it, asked many times between two frames)
         self._me: tuple[int, Me | None] = (-1, None)
         self.searches: tuple[int, dict] = (-1, {})            # Bot.Spawns(search)'s answers as of _ver
+        self._frame_kept: tuple[int, dict] = (-1, {})         # per_frame(): Group, Raid, Zone as of _ver
 
     @property
     def ready(self) -> bool:
@@ -81,7 +82,16 @@ class StateMirror:
         return self.searches[1]
 
     def zone_tlo(self) -> Zone | None:
-        return Zone.from_pb(self.zone) if self.zone else None
+        return self.per_frame("zone", lambda: Zone.from_pb(self.zone) if self.zone else None)
+
+    def per_frame(self, what: str, build):
+        """build()'s answer kept until the next frame (Group, Raid, Zone: asked many times between two frames)."""
+        if self._frame_kept[0] != self._ver:
+            self._frame_kept = (self._ver, {})
+        kept = self._frame_kept[1]
+        if what not in kept:
+            kept[what] = build()
+        return kept[what]
 
     def spawn_tlo(self, spawn_id: int) -> Spawn | None:
         s = self.spawns.get(spawn_id) if spawn_id else None  # nothing real has id 0

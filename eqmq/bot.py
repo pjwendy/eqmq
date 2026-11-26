@@ -343,12 +343,12 @@ class Bot:
     @property
     def Group(self) -> Group | None:
         """Your group, or None when not grouped."""
-        return Group.from_pb(self._state.me) if self._state.me else None
+        return self._state.per_frame("group", lambda: Group.from_pb(self._state.me) if self._state.me else None)
 
     @property
     def Raid(self) -> Raid | None:
         """The raid you are in (everyone in it, you too), or None when not in one."""
-        return Raid.from_pb(self._state.me) if self._state.me else None
+        return self._state.per_frame("raid", lambda: Raid.from_pb(self._state.me) if self._state.me else None)
 
     def Bots(self) -> list[Spawn]:
         """Your spawned EQEmu bots in this zone, nearest first."""
