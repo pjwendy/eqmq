@@ -21,6 +21,10 @@ class StateMirror:
         self._ver = 0                                          # bumped by every frame applied
         self._built: dict[int, tuple[pb.Spawn, Spawn]] = {}    # spawn id: the message it was built from, and the Spawn
         self._all: tuple[int, list[Spawn]] = (-1, [])          # all_spawns() as of _ver
+        # (and Me, and each search's answer, once per frame: a 36-leader runner was a whole core, 25 Nov, Me.from_pb and Spawns() a fifth
+        # of it, asked many times between two frames)
+        self._me: tuple[int, Me | None] = (-1, None)
+        self.searches: tuple[int, dict] = (-1, {})            # Bot.Spawns(search)'s answers as of _ver
 
     @property
     def ready(self) -> bool:
@@ -64,7 +68,17 @@ class StateMirror:
     # ---- frozen views ----
 
     def me_tlo(self) -> Me | None:
-        return Me.from_pb(self.me) if self.me else None
+        if self._me[0] == self._ver:
+            return self._me[1]
+        m = Me.from_pb(self.me) if self.me else None
+        self._me = (self._ver, m)
+        return m
+
+    def searched(self) -> dict:
+        """The searches' answers kept for this frame (Bot.Spawns): emptied when a frame is applied."""
+        if self.searches[0] != self._ver:
+            self.searches = (self._ver, {})
+        return self.searches[1]
 
     def zone_tlo(self) -> Zone | None:
         return Zone.from_pb(self.zone) if self.zone else None

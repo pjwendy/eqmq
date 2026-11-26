@@ -393,10 +393,14 @@ class Bot:
 
     def Spawns(self, search: str = "") -> list[Spawn]:
         """All spawns matching an MQ2 search string, nearest first."""
-        q = SpawnSearch.parse(search)
-        me = self._state.me
-        mz = me.z if me else 0.0
-        return sorted((s for s in self._state.all_spawns() if q.matches(s, mz)), key=lambda s: s.Distance)
+        kept = self._state.searched()
+        found = kept.get(search)
+        if found is None:
+            q = SpawnSearch.parse(search)
+            me = self._state.me
+            mz = me.z if me else 0.0
+            found = kept[search] = sorted((s for s in self._state.all_spawns() if q.matches(s, mz)), key=lambda s: s.Distance)
+        return list(found)
 
     def Spawn(self, search: str = "") -> Spawn | None:
         """The nearest spawn matching the search, as ${Spawn[...]}."""
