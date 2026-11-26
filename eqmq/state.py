@@ -31,10 +31,17 @@ class StateMirror:
     def ready(self) -> bool:
         return self.me is not None
 
-    def apply(self, frame: pb.ServerFrame) -> None:
+    def apply(self, frame: pb.ServerFrame) -> list[tuple[str, int]]:
+        """Apply a frame; returns what changed in it, for Bot's "state" handlers and wait_for (docs/runner-scaling.md §3): ("zone", 0) on a
+        snapshot, ("hater_added" / "hater_removed", spawn id), ("spawn_added" / "spawn_removed", id), ("target", id), ("bots", 0),
+        ("inventory", 0)."""
         self._ver += 1
         kind = frame.WhichOneof("payload")
+        haters_before = set(self.me.haters) if self.me is not None else set()
+        target_before = self.me.target_id if self.me is not None else 0
+        changes: list[tuple[str, int]] = []
         if kind == "snapshot":
+            changes.append(("zone", 0))
             snap = frame.snapshot
             self.me = pb.Self()
             self.me.CopyFrom(snap.me)
@@ -50,15 +57,26 @@ class StateMirror:
                 return  # deltas before a snapshot can't be applied
             self.me.CopyFrom(delta.me)
             for s in delta.spawns_changed:
+                if s.id not in self.spawns:
+                    changes.append(("spawn_added", s.id))
                 self.spawns[s.id] = s
             for spawn_id in delta.spawns_removed:
-                self.spawns.pop(spawn_id, None)
+                if self.spawns.pop(spawn_id, None) is not None:
+                    changes.append(("spawn_removed", spawn_id))
             if delta.HasField("book"):
                 self._set_book(delta.book)
             if delta.HasField("inventory"):
                 self._set_inventory(delta.inventory)
+                changes.append(("inventory", 0))
             if delta.HasField("bots"):
                 self.bot_gear = [BotGear.from_pb(b) for b in delta.bots.bots]
+                changes.append(("bots", 0))
+        if self.me is not None:
+            now = set(self.me.haters)
+            changes += [("hater_added", i) for i in now - haters_before] + [("hater_removed", i) for i in haters_before - now]
+            if self.me.target_id != target_before:
+                changes.append(("target", self.me.target_id))
+        return changes
 
     def _set_book(self, book: pb.SpellBook) -> None:
         self.book = [BookSpell(s.spell_id, s.name, s.level, s.slot) for s in book.spells]

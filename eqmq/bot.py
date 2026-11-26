@@ -224,7 +224,9 @@ class Bot:
         self._next_id = 1
         self._pending: dict[int, asyncio.Future] = {}
         self._handlers: dict[str, list[Callable]] = {"chat": [], "message": [], "line": [], "move": [], "zone": [],
-                                                     "death": [], "skill": []}
+                                                     "death": [], "skill": [], "state": []}
+        # (every frame's changes, StateMirror.apply: "state" handlers get the list; wait_for() wakes on each frame instead of polling)
+        self._frame_waiters: list[tuple[Callable, asyncio.Future]] = []
         self._consider_waiters: dict[int, list[asyncio.Future]] = {}
         self._loot_waiters: dict[int, list[asyncio.Future]] = {}
         self._merchant_waiters: dict[int, list[asyncio.Future]] = {}
@@ -310,9 +312,17 @@ class Bot:
                 elif kind == "event":
                     await self._dispatch_event(frame.event)
                 else:
-                    self._state.apply(frame)
+                    changes = self._state.apply(frame)
                     if self._state.ready:
                         self._ready.set()
+                    if changes:
+                        for fn in list(self._handlers["state"]):
+                            try:
+                                fn(changes)
+                            except Exception:  # noqa: BLE001  (a handler's error is the handler's)
+                                log.exception("a state handler failed")
+                    if self._frame_waiters:
+                        self._wake_waiters(changes)
                     if kind == "snapshot" and self._zoning:
                         # the session survived the zone change: this is the new zone's first state
                         self._zoning = False
@@ -323,6 +333,10 @@ class Bot:
                 if not fut.done():
                     fut.set_result(CommandResult(False, "disconnected"))
             self._pending.clear()
+            for _, fut in self._frame_waiters:  # (wait_for: None on a disconnect)
+                if not fut.done():
+                    fut.set_result(None)
+            self._frame_waiters = []
             self._closed.set()
 
     # ---- TLOs ----
@@ -1410,9 +1424,46 @@ class Bot:
 
     # ---- events ----
 
+    def _wake_waiters(self, changes: list) -> None:
+        keep = []
+        for pred, fut in self._frame_waiters:
+            if fut.done():
+                continue
+            try:
+                hit = pred(changes)
+            except Exception as e:  # noqa: BLE001
+                fut.set_exception(e)
+                continue
+            if hit:
+                fut.set_result(hit)
+            else:
+                keep.append((pred, fut))
+        self._frame_waiters = keep
+
+    async def wait_for(self, predicate: Callable[[list], object], timeout: float | None = None):
+        """Wait until predicate(changes) is true for a frame (changes: StateMirror.apply's list; the TLOs are the new frame's when it runs),
+        instead of polling: e.g. wait_for(lambda ch: any(k == "hater_added" for k, _ in ch), 5). Returns its value, None on a timeout or a
+        disconnect. The predicate is also tried once now, with no changes."""
+        try:
+            now = predicate([])
+        except Exception:  # noqa: BLE001
+            now = None
+        if now:
+            return now
+        fut = asyncio.get_running_loop().create_future()
+        self._frame_waiters.append((predicate, fut))
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            if not fut.done():
+                fut.cancel()
+
     def on(self, kind: str) -> Callable:
         """Register a handler: "chat" gets a Chat, "message" a Message, "line" every line, "move" a MoveResult,
-        "zone" a ZoneChange, "death" a Death (yours), "skill" a SkillUp (also a line, as the client prints it)."""
+        "zone" a ZoneChange, "death" a Death (yours), "skill" a SkillUp (also a line, as the client prints it), "state" each frame's
+        changes (a list of (kind, spawn id): hater_added, hater_removed, spawn_added, spawn_removed, target, zone, bots, inventory)."""
         if kind not in self._handlers:
             raise ValueError(f"unknown event kind {kind!r}; use one of {sorted(self._handlers)}")
 
